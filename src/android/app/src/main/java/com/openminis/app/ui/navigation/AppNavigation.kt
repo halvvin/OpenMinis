@@ -160,9 +160,7 @@ object Routes {
     /** [T-cloud-sync] Personal WebDAV cloud sync. */
     const val CLOUD_SYNC = "cloud_sync"
     /** [T-browser-windows] Persistent smart-browser windows (§3). */
-    const val BROWSER_WINDOWS = "browser_windows"
-    const val BROWSER_WINDOW = "browser_window/{windowId}"
-    fun browserWindow(windowId: String) = "browser_window/$windowId"
+    const val BROWSER = "smart_browser"
     const val MEMORY_FILE_EDIT = "memory_file/{fileName}/{isGlobal}"
     const val PERMISSIONS = "permissions"
     /**
@@ -600,7 +598,7 @@ fun AppNavigation(
                 onKeepWorkingClick = { navController.safeNavigate(Routes.KEEP_WORKING) },
                 onAutomationClick = { navController.safeNavigate(Routes.AUTOMATION) },
                 onCloudSyncClick = { navController.safeNavigate(Routes.CLOUD_SYNC) },
-                onBrowserWindowsClick = { navController.safeNavigate(Routes.BROWSER_WINDOWS) },
+                onBrowserWindowsClick = { navController.safeNavigate(Routes.BROWSER) },
                 onPermissionsClick = { navController.safeNavigate(Routes.PERMISSIONS) },
                 onUsageClick = { navController.safeNavigate(Routes.USAGE_STATS) },
                 onAppearanceClick = { navController.safeNavigate(Routes.APPEARANCE) },
@@ -1194,31 +1192,10 @@ fun AppNavigation(
             )
         }
 
-        // [T-browser-windows] Persistent smart-browser windows.
-        composable(Routes.BROWSER_WINDOWS) {
-            com.openminis.app.ui.browser.BrowserWindowsScreen(
+        // [T-browser-tabs] Smart browser with Chrome-style tabs + per-tab AI panel.
+        composable(Routes.BROWSER) {
+            com.openminis.app.ui.browser.BrowserScreen(
                 onBack = { navController.safePopBackStack() },
-                onOpenWindow = { id -> navController.safeNavigate(Routes.browserWindow(id)) },
-            )
-        }
-        composable(
-            route = Routes.BROWSER_WINDOW,
-            arguments = listOf(navArgument("windowId") { type = NavType.StringType }),
-        ) { backStackEntry ->
-            val windowId = backStackEntry.arguments?.getString("windowId") ?: return@composable
-            com.openminis.app.ui.browser.BrowserWindowScreen(
-                windowId = windowId,
-                onBack = { navController.safePopBackStack() },
-                onOpenChat = { sid ->
-                    // Linked chat session: draft id ("__new__<uuid>") before
-                    // the first message, real id afterwards.
-                    val route = if (sid.startsWith("__new__")) {
-                        Routes.chat(sid)
-                    } else {
-                        Routes.chat(sid)
-                    }
-                    navController.safeNavigate(route)
-                },
             )
         }
 

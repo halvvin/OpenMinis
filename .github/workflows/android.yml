@@ -35,6 +35,15 @@ jobs:
       - name: Setup Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
+      # [T-ci-rootfs] alpine-minirootfs.tar.gz + proot-aarch64 are .gitignored
+      # (upstream prepares them on dev machines). Without them the sandbox
+      # crashes at first shell use: FileNotFoundException: alpine-minirootfs.tar.
+      - name: Prepare sandbox assets (Alpine rootfs + proot)
+        working-directory: .
+        run: |
+          chmod +x scripts/prepare_android_sandbox.sh
+          ./scripts/prepare_android_sandbox.sh
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 

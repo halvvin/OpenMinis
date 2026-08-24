@@ -217,12 +217,12 @@ fun SettingsScreen(
                     subtitle = "ادامه‌ی خودکار وظایف ناتمام پس از خطا / قطعی",
                     onClick = onKeepWorkingClick,
                 )
-                // [T-browser-windows] Persistent smart-browser windows (§3).
+                // [T-browser-tabs] Smart browser (§3).
                 SettingsItem(
                     icon = Icons.Outlined.Language,
                     iconColor = Color(0xFF0A84FF),
                     title = "مرورگر هوشمند",
-                    subtitle = "پنجره‌های ماندگار با چت و ایجنت برای هر موضوع",
+                    subtitle = "تب‌های چندگانه + چت AI کنار صفحه، ماندگار",
                     onClick = onBrowserWindowsClick,
                 )
                 // [T-automation-hub] Automation & agents (§8).
