@@ -87,7 +87,6 @@ fun BrowserScreen(onBack: () -> Unit) {
     var showChatPanel by remember { mutableStateOf(true) }
     var reverseApiOn by remember { mutableStateOf(autoPrefs.reverseApiEnabled) }
     var raeStatus by remember { mutableStateOf("") }
-    var webViews = remember { mutableMapOf<String, WebView>() }
 
     fun refresh() { tabs = store.load() }
 
@@ -101,7 +100,6 @@ fun BrowserScreen(onBack: () -> Unit) {
 
     fun closeTab(id: String) {
         store.remove(id)
-        webViews.remove(id)
         refresh()
         if (activeId == id) activeId = tabs.firstOrNull()?.id ?: ""
     }
@@ -187,7 +185,6 @@ fun BrowserScreen(onBack: () -> Unit) {
                 onRaeStatus = { raeStatus = it },
                 onTitleChanged = { t -> store.get(active.id)?.let { store.upsert(it.copy(title = t)) }; refresh() },
                 onMessagesChanged = { refresh() },
-                registerWebView = { w -> webViews[active.id] = w },
             )
         }
     }
@@ -326,7 +323,7 @@ private fun BrowserTabContent(
                                 }
                             }
                             if (tab.url.isNotBlank()) loadUrl(tab.url)
-                        }.also { wv(it); webViewRef = it }
+                        }.also { webViewRef = it }
                     },
                     modifier = Modifier.fillMaxSize(),
                     onRelease = { webViewRef = null },
