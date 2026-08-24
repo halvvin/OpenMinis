@@ -152,6 +152,17 @@ object Routes {
     const val USER_PROFILE = "user_profile"
     /** [T-keep-working-engine] Keep Working (auto-continue) settings. */
     const val KEEP_WORKING = "keep_working"
+    /** [T-automation-hub] Automation & agents hub (§8). */
+    const val AUTOMATION = "automation"
+    const val ALWAYS_ON = "automation_alwayson"
+    const val TERMUX = "automation_termux"
+    const val AGENT_MANAGER = "automation_agents"
+    /** [T-cloud-sync] Personal WebDAV cloud sync. */
+    const val CLOUD_SYNC = "cloud_sync"
+    /** [T-browser-windows] Persistent smart-browser windows (§3). */
+    const val BROWSER_WINDOWS = "browser_windows"
+    const val BROWSER_WINDOW = "browser_window/{windowId}"
+    fun browserWindow(windowId: String) = "browser_window/$windowId"
     const val MEMORY_FILE_EDIT = "memory_file/{fileName}/{isGlobal}"
     const val PERMISSIONS = "permissions"
     /**
@@ -587,6 +598,9 @@ fun AppNavigation(
                 onSoulClick = { navController.safeNavigate(Routes.SOUL) },
                 onProfileClick = { navController.safeNavigate(Routes.USER_PROFILE) },
                 onKeepWorkingClick = { navController.safeNavigate(Routes.KEEP_WORKING) },
+                onAutomationClick = { navController.safeNavigate(Routes.AUTOMATION) },
+                onCloudSyncClick = { navController.safeNavigate(Routes.CLOUD_SYNC) },
+                onBrowserWindowsClick = { navController.safeNavigate(Routes.BROWSER_WINDOWS) },
                 onPermissionsClick = { navController.safeNavigate(Routes.PERMISSIONS) },
                 onUsageClick = { navController.safeNavigate(Routes.USAGE_STATS) },
                 onAppearanceClick = { navController.safeNavigate(Routes.APPEARANCE) },
@@ -1145,6 +1159,66 @@ fun AppNavigation(
         composable(Routes.KEEP_WORKING) {
             com.openminis.app.ui.settings.KeepWorkingSettingsScreen(
                 onBack = { navController.safePopBackStack() },
+            )
+        }
+
+        // [T-automation-hub] Automation & agents hub (§8).
+        composable(Routes.AUTOMATION) {
+            com.openminis.app.ui.settings.AutomationHubScreen(
+                onBack = { navController.safePopBackStack() },
+                onAlwaysOnClick = { navController.safeNavigate(Routes.ALWAYS_ON) },
+                onTermuxClick = { navController.safeNavigate(Routes.TERMUX) },
+                onAgentManagerClick = { navController.safeNavigate(Routes.AGENT_MANAGER) },
+            )
+        }
+        composable(Routes.ALWAYS_ON) {
+            com.openminis.app.ui.settings.AlwaysOnScreen(
+                onBack = { navController.safePopBackStack() },
+            )
+        }
+        composable(Routes.TERMUX) {
+            com.openminis.app.ui.settings.TermuxScreen(
+                onBack = { navController.safePopBackStack() },
+            )
+        }
+        composable(Routes.AGENT_MANAGER) {
+            com.openminis.app.ui.settings.AgentManagerScreen(
+                onBack = { navController.safePopBackStack() },
+            )
+        }
+
+        // [T-cloud-sync] Personal WebDAV sync.
+        composable(Routes.CLOUD_SYNC) {
+            com.openminis.app.ui.settings.CloudSyncScreen(
+                onBack = { navController.safePopBackStack() },
+            )
+        }
+
+        // [T-browser-windows] Persistent smart-browser windows.
+        composable(Routes.BROWSER_WINDOWS) {
+            com.openminis.app.ui.browser.BrowserWindowsScreen(
+                onBack = { navController.safePopBackStack() },
+                onOpenWindow = { id -> navController.safeNavigate(Routes.browserWindow(id)) },
+            )
+        }
+        composable(
+            route = Routes.BROWSER_WINDOW,
+            arguments = listOf(navArgument("windowId") { type = NavType.StringType }),
+        ) { backStackEntry ->
+            val windowId = backStackEntry.arguments?.getString("windowId") ?: return@composable
+            com.openminis.app.ui.browser.BrowserWindowScreen(
+                windowId = windowId,
+                onBack = { navController.safePopBackStack() },
+                onOpenChat = { sid ->
+                    // Linked chat session: draft id ("__new__<uuid>") before
+                    // the first message, real id afterwards.
+                    val route = if (sid.startsWith("__new__")) {
+                        Routes.chat(sid)
+                    } else {
+                        Routes.chat(sid)
+                    }
+                    navController.safeNavigate(route)
+                },
             )
         }
 

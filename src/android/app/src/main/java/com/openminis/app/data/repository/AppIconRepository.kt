@@ -29,13 +29,17 @@ object AppIconRepository {
     private const val TAG = "AppIconRepository"
     private const val PREFS = "app_icon_prefs"
     private const val KEY_SELECTED_ID = "selected_icon_id"
-    private const val PACKAGE_NAME = "com.openminis.app"
 
-    enum class Variant(val id: String, val aliasClass: String) {
-        Auto("auto", "$PACKAGE_NAME.MainActivityIconAuto"),
-        ClassicLight("classic_light", "$PACKAGE_NAME.MainActivityIconLight"),
-        ClassicDark("classic_dark", "$PACKAGE_NAME.MainActivityIconDark"),
+    enum class Variant(val id: String, val aliasClassSuffix: String) {
+        Auto("auto", ".MainActivityIconAuto"),
+        ClassicLight("classic_light", ".MainActivityIconLight"),
+        ClassicDark("classic_dark", ".MainActivityIconDark"),
         ;
+
+        /** [T-fork-socket-namespace] Resolved against the RUNNING package so
+         *  forks (different applicationId) toggle the right activity aliases
+         *  instead of silently failing against the upstream package name. */
+        fun aliasClass(packageName: String): String = packageName + aliasClassSuffix
 
         companion object {
             fun fromId(id: String?): Variant = entries.firstOrNull { it.id == id } ?: Auto
@@ -62,7 +66,7 @@ object AppIconRepository {
         val pm = ctx.packageManager
         try {
             for (variant in Variant.entries) {
-                val component = ComponentName(ctx, variant.aliasClass)
+                val component = ComponentName(ctx, variant.aliasClass(ctx.packageName))
                 val desiredState = if (variant == target) {
                     PackageManager.COMPONENT_ENABLED_STATE_ENABLED
                 } else {

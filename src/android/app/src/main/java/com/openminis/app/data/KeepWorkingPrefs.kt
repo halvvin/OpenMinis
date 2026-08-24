@@ -1,16 +1,19 @@
 package com.openminis.app.data
 
 import android.content.Context
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
  * [T-keep-working-engine] Persistent settings for the Keep Working Engine
  * (موتور ادامه‌ی خودکار وظایف).
  *
- * When enabled, a failed / interrupted turn (network loss, rate limit,
- * provider error, app restart mid-task) is automatically continued by
- * re-sending the configured continuation command after [intervalSeconds],
- * up to [maxAttempts] times per task.
+ * v2 additions (user spec §7-rev):
+ *  - [intervalSeconds] has NO upper cap — the user may set any gap from 5
+ *    seconds up to weeks (UI offers sec/min/hour/day units).
+ *  - [chatFilterEnabled] + [targetChats]: when the filter is on, the engine
+ *    ONLY auto-continues inside chats whose title matches one of the
+ *    user-listed names. Off = every chat, as before.
  *
  * State is stored in SharedPreferences so it survives app restarts.
  */
@@ -18,10 +21,14 @@ data class KeepWorkingConfig(
     val enabled: Boolean = false,
     /** Text sent to the model each time the engine continues the task. */
     val command: String = "وظیفه را از جایی که متوقف شده ادامه بده",
-    /** Delay between retries, in seconds. */
-    val intervalSeconds: Int = 30,
+    /** Delay between retries, in seconds. No upper cap (user choice). */
+    val intervalSeconds: Long = 30L,
     /** Max automatic continuation attempts per task. */
     val maxAttempts: Int = 5,
+    /** When true, auto-continue only fires in chats named in [targetChats]. */
+    val chatFilterEnabled: Boolean = false,
+    /** Chat-title allowlist used when [chatFilterEnabled] is true. */
+    val targetChats: Set<String> = emptySet(),
 )
 
 class KeepWorkingPrefs private constructor(context: Context) {
@@ -31,16 +38,29 @@ class KeepWorkingPrefs private constructor(context: Context) {
     fun load(): KeepWorkingConfig = KeepWorkingConfig(
         enabled = prefs.getBoolean(KEY_ENABLED, false),
         command = prefs.getString(KEY_COMMAND, null) ?: KeepWorkingConfig().command,
-        intervalSeconds = prefs.getInt(KEY_INTERVAL, 30).coerceIn(5, 3600),
+        intervalSeconds = prefs.getLong(KEY_INTERVAL, 30L).coerceIn(5L, 31_536_000L),
         maxAttempts = prefs.getInt(KEY_MAX_ATTEMPTS, 5).coerceIn(1, 100),
+        chatFilterEnabled = prefs.getBoolean(KEY_CHAT_FILTER, false),
+        targetChats = run {
+            val arr = runCatching { JSONArray(prefs.getString(KEY_TARGET_CHATS, "[]") ?: "[]") }
+            val out = mutableSetOf<String>()
+            arr.getOrNull()?.let { a ->
+                for (i in 0 until a.length()) out.add(a.optString(i))
+            }
+            out.filter { it.isNotBlank() }.toSet()
+        },
     )
 
     fun save(config: KeepWorkingConfig) {
+        val arr = JSONArray()
+        config.targetChats.forEach { arr.put(it) }
         prefs.edit()
             .putBoolean(KEY_ENABLED, config.enabled)
             .putString(KEY_COMMAND, config.command)
-            .putInt(KEY_INTERVAL, config.intervalSeconds)
+            .putLong(KEY_INTERVAL, config.intervalSeconds)
             .putInt(KEY_MAX_ATTEMPTS, config.maxAttempts)
+            .putBoolean(KEY_CHAT_FILTER, config.chatFilterEnabled)
+            .putString(KEY_TARGET_CHATS, arr.toString())
             .apply()
     }
 
@@ -66,6 +86,8 @@ class KeepWorkingPrefs private constructor(context: Context) {
         private const val KEY_COMMAND = "kw.command"
         private const val KEY_INTERVAL = "kw.interval_seconds"
         private const val KEY_MAX_ATTEMPTS = "kw.max_attempts"
+        private const val KEY_CHAT_FILTER = "kw.chat_filter_enabled"
+        private const val KEY_TARGET_CHATS = "kw.target_chats"
         private const val KEY_ACTIVE_SESSION = "kw.active_session"
         private const val KEY_ATTEMPTS_USED = "kw.attempts_used"
 

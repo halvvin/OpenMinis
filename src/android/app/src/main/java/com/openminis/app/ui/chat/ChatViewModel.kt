@@ -5724,6 +5724,13 @@ class ChatViewModel(
             if (!isRecoverableForKeepWorking(cause)) return
             val sid = realSessionId.ifEmpty { sessionId }
             if (sid.isEmpty()) return
+            // [T-keep-working-chat-filter] When the user listed target chat
+            // names, only those chats are shepherded. Resolve the session
+            // title synchronously (cheap single-row DB read on the caller
+            // thread is avoided — we do it inside the scheduling coroutine
+            // below instead; here a quick cached check runs first so chats
+            // already known not to match skip scheduling entirely).
+            if (config.chatFilterEnabled && config.targetChats.isEmpty()) return
             if (prefs.activeSessionId != sid) {
                 prefs.activeSessionId = sid
                 prefs.attemptCount = 0
@@ -5739,14 +5746,33 @@ class ChatViewModel(
             }
             prefs.attemptCount = attempt
             appendSystemInfo(
-                text = "🔄 موتور ادامه خودکار: تلاش $attempt از ${config.maxAttempts} پس از ${config.intervalSeconds} ثانیه…",
+                text = "🔄 موتور ادامه خودکار: تلاش $attempt از ${config.maxAttempts} پس از ${describeInterval(config.intervalSeconds)}…",
                 iconKind = "autorenew",
             )
             viewModelScope.launch {
+                // Chat-title gate: resolved inside the coroutine so the DB
+                // read never blocks the error path. If the session was
+                // renamed/deleted meanwhile, skip silently.
+                if (config.chatFilterEnabled) {
+                    val title = try {
+                        chatRepository.getSession(sid)?.title.orEmpty().trim()
+                    } catch (_: Exception) { "" }
+                    if (title.isEmpty() || config.targetChats.none { it.trim().equals(title, ignoreCase = true) }) {
+                        return@launch
+                    }
+                }
                 delay(config.intervalSeconds * 1000L)
                 sendMessage(config.command, skipContextCheck = true)
             }
         } catch (_: Exception) { /* engine must never break the chat path */ }
+    }
+
+    /** Human-friendly interval for the engine's status line. */
+    private fun describeInterval(seconds: Long): String = when {
+        seconds % 86_400L == 0L && seconds >= 86_400L -> "${seconds / 86_400L} روز"
+        seconds % 3600L == 0L && seconds >= 3600L -> "${seconds / 3600L} ساعت"
+        seconds % 60L == 0L && seconds >= 60L -> "${seconds / 60L} دقیقه"
+        else -> "$seconds ثانیه"
     }
 
     /** Heuristic: errors worth auto-continuing (transient infra/provider failures). */

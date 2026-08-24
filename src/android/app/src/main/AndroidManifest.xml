@@ -73,6 +73,10 @@
          (read + write + readdir) to /storage/emulated/0/, matching the user's mental
          model of "the folder they picked is the folder Minis sees". -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+
+    <!-- [T-termux-bridge] Official Termux external-command permission (§8-2). -->
+    <uses-permission android:name="com.termux.permission.RUN_COMMAND" />
+
     <!-- "Take Photo" composer entry. We never use the camera background; the
          permission is requested at the moment the user taps the menu item. -->
     <uses-permission android:name="android.permission.CAMERA" />

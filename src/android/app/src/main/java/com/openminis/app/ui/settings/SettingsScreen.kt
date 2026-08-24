@@ -24,6 +24,9 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Autorenew
+import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.BatteryFull
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Dashboard
@@ -92,6 +95,12 @@ fun SettingsScreen(
     onProfileClick: () -> Unit = {},
     // [T-keep-working-engine] Keep Working (auto-continue) settings row.
     onKeepWorkingClick: () -> Unit = {},
+    // [T-automation-hub] Automation & agents hub row.
+    onAutomationClick: () -> Unit = {},
+    // [T-cloud-sync] Personal WebDAV cloud sync row.
+    onCloudSyncClick: () -> Unit = {},
+    // [T-browser-windows] Smart-browser persistent windows row.
+    onBrowserWindowsClick: () -> Unit = {},
     onPermissionsClick: () -> Unit = {},
     onUsageClick: () -> Unit = {},
     onAppearanceClick: () -> Unit = {},
@@ -207,6 +216,30 @@ fun SettingsScreen(
                     title = "موتور ادامه خودکار",
                     subtitle = "ادامه‌ی خودکار وظایف ناتمام پس از خطا / قطعی",
                     onClick = onKeepWorkingClick,
+                )
+                // [T-browser-windows] Persistent smart-browser windows (§3).
+                SettingsItem(
+                    icon = Icons.Outlined.Language,
+                    iconColor = Color(0xFF0A84FF),
+                    title = "مرورگر هوشمند",
+                    subtitle = "پنجره‌های ماندگار با چت و ایجنت برای هر موضوع",
+                    onClick = onBrowserWindowsClick,
+                )
+                // [T-automation-hub] Automation & agents (§8).
+                SettingsItem(
+                    icon = Icons.Outlined.SmartToy,
+                    iconColor = Color(0xFFBF5AF2),
+                    title = "اتوماسیون و ایجنت‌ها",
+                    subtitle = "اجرای همیشگی · Termux · مدیریت ایجنت‌ها",
+                    onClick = onAutomationClick,
+                )
+                // [T-cloud-sync] Personal WebDAV sync.
+                SettingsItem(
+                    icon = Icons.Outlined.CloudSync,
+                    iconColor = Color(0xFF30B0C7),
+                    title = "همگام‌سازی ابری شخصی",
+                    subtitle = "پروفایل، مهارت‌ها و تنظیمات روی فضای ابری خودت",
+                    onClick = onCloudSyncClick,
                 )
                 SettingsItem(
                     icon = Icons.Outlined.Psychology,
