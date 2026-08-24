@@ -2,6 +2,7 @@ package com.openminis.app.data
 
 import android.content.Context
 import android.util.Base64
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
@@ -148,8 +149,9 @@ object CloudSyncStore {
                         intervalSeconds = o.optLong("intervalSeconds", cur.intervalSeconds),
                         maxAttempts = o.optInt("maxAttempts", cur.maxAttempts),
                         chatFilterEnabled = o.optBoolean("chatFilterEnabled", cur.chatFilterEnabled),
-                        targetChats = (0 until o.optJSONArray("targetChats")?.length() ?: 0)
-                            .map { o.optJSONArray("targetChats")!!.optString(it) }.toSet(),
+                        targetChats = o.optJSONArray("targetChats")?.let { a ->
+                            (0 until a.length()).map { a.optString(it) }.toSet()
+                        } ?: emptySet(),
                     )
                 )
             }.onSuccess { results += SyncResult(true, "keep_working") }

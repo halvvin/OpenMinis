@@ -40,8 +40,9 @@ data class BrowserWindow(
             name = o.optString("name"),
             url = o.optString("url"),
             chatSessionId = o.optString("chatSessionId"),
-            artifacts = (0 until o.optJSONArray("artifacts")?.length() ?: 0)
-                .map { o.optJSONArray("artifacts")!!.optString(it) },
+            artifacts = o.optJSONArray("artifacts")?.let { a ->
+                (0 until a.length()).map { a.optString(it) }
+            } ?: emptyList(),
             createdAt = o.optLong("createdAt"),
             updatedAt = o.optLong("updatedAt"),
         )
