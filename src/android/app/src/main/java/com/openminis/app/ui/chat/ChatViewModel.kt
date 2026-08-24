@@ -3461,6 +3461,12 @@ class ChatViewModel(
             val config = providerRepository.config.value
             _availableGroups.value = config.modelGroups
 
+            // [T-keep-working-restart-resume] After a crash / kill / reboot,
+            // re-fire the continuation command for a task the engine had
+            // marked in-flight in THIS session. Runs once per session load;
+            // the engine's own attempt cap bounds the loop.
+            resumeInterruptedTaskIfAny()
+
             if (isDraft) {
                 // Draft session: just set up provider using default group or first entry
                 _sessionTitle.value = "New Chat"
@@ -5786,6 +5792,58 @@ class ChatViewModel(
             "502", "503", "504", "econn", "unavailable", "overloaded",
             "socket", "stream",
         ).any { msg.contains(it) }
+    }
+
+    /**
+     * [T-keep-working-restart-resume] Crash / kill / reboot resume.
+     *
+     * Called when a session finishes LOADING. If the engine had marked this
+     * session's task as in-flight (activeSessionId matches) and attempts
+     * remain, the continuation command is re-sent automatically — so work
+     * interrupted by an app kill or phone reboot picks up where it stopped,
+     * without the user remembering anything.
+     */
+    fun resumeInterruptedTaskIfAny() {
+        try {
+            val prefs = keepWorkingPrefs()
+            val config = prefs.load()
+            if (!config.enabled) return
+            val sid = realSessionId.ifEmpty { sessionId }
+            if (sid.isEmpty()) return
+            if (prefs.activeSessionId != sid) return
+            if (prefs.attemptCount >= config.maxAttempts) {
+                prefs.resetTaskState()
+                return
+            }
+            // Chat-name gate applies here too.
+            if (config.chatFilterEnabled) {
+                viewModelScope.launch {
+                    val title = try {
+                        chatRepository.getSession(sid)?.title.orEmpty().trim()
+                    } catch (_: Exception) { "" }
+                    if (title.isEmpty() || config.targetChats.none { it.trim().equals(title, ignoreCase = true) }) {
+                        return@launch
+                    }
+                    prefs.attemptCount = prefs.attemptCount + 1
+                    appendSystemInfo(
+                        text = "🔄 موتور ادامه خودکار: وظیفه‌ی ناتمام پیدا شد — ادامه پس از باز شدن چت (تلاش ${prefs.attemptCount} از ${config.maxAttempts}).",
+                        iconKind = "autorenew",
+                    )
+                    delay(2000) // let the session UI settle before sending
+                    sendMessage(config.command, skipContextCheck = true)
+                }
+            } else {
+                prefs.attemptCount = prefs.attemptCount + 1
+                appendSystemInfo(
+                    text = "🔄 موتور ادامه خودکار: وظیفه‌ی ناتمام پیدا شد — ادامه پس از باز شدن چت (تلاش ${prefs.attemptCount} از ${config.maxAttempts}).",
+                    iconKind = "autorenew",
+                )
+                viewModelScope.launch {
+                    delay(2000)
+                    sendMessage(config.command, skipContextCheck = true)
+                }
+            }
+        } catch (_: Exception) { /* never break session load */ }
     }
 
     /**

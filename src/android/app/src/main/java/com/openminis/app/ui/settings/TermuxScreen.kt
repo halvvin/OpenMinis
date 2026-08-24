@@ -1,6 +1,7 @@
 package com.openminis.app.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +29,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -64,6 +66,8 @@ fun TermuxScreen(onBack: () -> Unit) {
     var console by remember { mutableStateOf("") }
     var command by remember { mutableStateOf("") }
     var loaded by remember { mutableStateOf(false) }
+    val history = remember { mutableStateListOf<String>() }
+    var historyIdx by remember { mutableStateOf(-1) }
 
     LaunchedEffect(Unit) {
         enabled = prefs.termuxEnabled
@@ -90,6 +94,11 @@ fun TermuxScreen(onBack: () -> Unit) {
             log(r.output.ifBlank { "(بدون خروجی)" })
             testing = false
         }
+    }
+
+    fun runAndRemember(cmd: String) {
+        if (cmd.isNotBlank()) { history.add(cmd); historyIdx = -1 }
+        run(cmd)
     }
 
     Scaffold(
@@ -163,9 +172,36 @@ fun TermuxScreen(onBack: () -> Unit) {
                     singleLine = true,
                 )
                 IconButton(
-                    onClick = { val c = command.trim(); if (c.isNotEmpty()) { command = ""; run(c) } },
+                    onClick = { val c = command.trim(); if (c.isNotEmpty()) { command = ""; runAndRemember(c) } },
                     enabled = !testing && command.isNotBlank(),
                 ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "اجرا") }
+            }
+
+            // ── Terminal key row: history ↑/↓ + shell characters ────────
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                listOf("↑", "↓", "/", "~", "-", "|", ">", ">>", ".", "=", "\"", "'", "\$", "&&", "sudo ").forEach { k ->
+                    TextButton(onClick = {
+                        when (k) {
+                            "↑" -> {
+                                if (history.isNotEmpty()) {
+                                    historyIdx = if (historyIdx == -1) history.size - 1 else (historyIdx - 1).coerceAtLeast(0)
+                                    command = history[historyIdx]
+                                }
+                            }
+                            "↓" -> {
+                                if (history.isNotEmpty()) {
+                                    historyIdx = (historyIdx + 1).coerceAtMost(history.size - 1)
+                                    command = history[historyIdx]
+                                }
+                            }
+                            "sudo " -> command += k
+                            else -> command += k
+                        }
+                    }) { Text(k, style = MaterialTheme.typography.labelMedium) }
+                }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -157,6 +157,8 @@ private val languageOptions = listOf(
     LanguageOption("de", "\uD83C\uDDE9\uD83C\uDDEA", "Deutsch"),
     // ru: flag \uD83C\uDDF7\uD83C\uDDFA (RU), self-name \u0420\u0443\u0441\u0441\u043A\u0438\u0439 (Russkiy)
     LanguageOption("ru", "\uD83C\uDDF7\uD83C\uDDFA", "\u0420\u0443\u0441\u0441\u043A\u0438\u0439"),
+    // [T-fa-locale] Persian (فارسی) — RTL; values-fa provides the translations.
+    LanguageOption("fa", "\uD83C\uDDEE\uD83C\uDDF7", "فارسی"),
 )
 
 fun getAppearancePrefs(context: Context): SharedPreferences =

@@ -21,6 +21,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -60,18 +61,21 @@ import com.openminis.app.data.repository.ProviderRepository
 import kotlinx.coroutines.launch
 
 /**
- * [T-browser-tabs-v2] Smart browser, Chrome-style — rewritten for
- * robustness after on-device feedback:
+ * [T-browser-tabs-v3] Chrome-style browser — third iteration, rebuilt after
+ * on-device feedback:
  *
- *  - Tab strip is ALWAYS visible; a tab is auto-created on first entry so
- *    the user never lands on an empty "+" screen (the v1 stuck-screen bug).
- *  - URL/search bar always visible; plain words go to DuckDuckGo search.
- *  - Split view: page on top, AI panel below — page stays visible while
- *    chatting. Panel collapses via its header.
- *  - Model picker lists the SAME configured models/APIs as the main chat.
- *  - Every store mutation is write-through + state-list update; no stale
- *    snapshots can clobber chat history.
- *  - All inputs sit above the keyboard (imePadding).
+ *  - REAL WebView POOL (one live WebView per tab, max [MAX_POOLED], LRU
+ *    evicted): switching tabs no longer reloads pages or freezes — the
+ *    root cause of the v2 lag.
+ *  - Tab strip always visible with "+" at the END of the strip (plus one
+ *    in the top bar); a tab auto-opens on first entry — there is NO empty
+ *    intermediate screen to get stuck in, even after restart.
+ *  - Omnibox under the strip: URL + search in one bar (words → DuckDuckGo),
+ *    plus back / forward / reload like a real browser.
+ *  - All persistence is read-modify-write from disk: stale composable
+ *    snapshots can never clobber chat history again (v2 data-loss bug).
+ *  - Extensions row (translate / files / forms / Reverse API) sits with
+ *    the AI panel; inputs are keyboard-aware (imePadding).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("SetJavaScriptEnabled")
@@ -81,31 +85,57 @@ fun BrowserScreen(onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     val store = remember { BrowserTabStore.get(context) }
     val autoPrefs = remember { AutomationPrefs.get(context) }
+    val appContext = remember { context.applicationContext }
 
-    // Single source of truth — a snapshot list backed by disk on every change.
     val tabs = remember { mutableStateListOf<BrowserTab>().apply { addAll(store.load()) } }
     var activeId by remember { mutableStateOf(tabs.firstOrNull()?.id.orEmpty()) }
     var chatVisible by remember { mutableStateOf(true) }
     var reverseApiOn by remember { mutableStateOf(autoPrefs.reverseApiEnabled) }
     var raeStatus by remember { mutableStateOf("") }
 
-    // v1 bug fix: never show an empty screen — auto-open a tab.
+    // ── WebView pool: one live instance per tab, LRU-capped ─────────────
+    val webViewPool = remember { LinkedHashMap<String, WebView>() }
+    fun pooledWebView(tabId: String): WebView {
+        webViewPool.remove(tabId)?.let { wv ->
+            webViewPool[tabId] = wv   // touch → most recently used
+            return wv
+        }
+        val wv = WebView(appContext).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.loadWithOverviewMode = true
+            settings.useWideViewPort = true
+        }
+        webViewPool[tabId] = wv
+        // Evict least-recently-used beyond the cap (destroy to free memory).
+        while (webViewPool.size > MAX_POOLED) {
+            val oldest = webViewPool.keys.first()
+            if (oldest == tabId) break
+            webViewPool.remove(oldest)?.destroy()
+        }
+        return wv
+    }
+
+    // v1/v2 bug fix: never an empty screen — auto-open a tab on first entry.
     LaunchedEffect(Unit) {
         if (tabs.isEmpty()) {
             val t = BrowserTab(id = store.newId())
             store.upsert(t)
             tabs.add(t)
-            activeId = t.id
         }
         if (activeId.isEmpty() || tabs.none { it.id == activeId }) {
             activeId = tabs.first().id
         }
     }
 
-    fun persist(tab: BrowserTab) {
-        store.upsert(tab)
-        val i = tabs.indexOfFirst { it.id == tab.id }
-        if (i >= 0) tabs[i] = store.get(tab.id) ?: tab
+    // Read-modify-write helpers — NEVER mutate from a stale snapshot.
+    fun updateTab(tabId: String, transform: (BrowserTab) -> BrowserTab) {
+        store.get(tabId)?.let { cur ->
+            val next = transform(cur)
+            store.upsert(next)
+            val i = tabs.indexOfFirst { it.id == tabId }
+            if (i >= 0) tabs[i] = next
+        }
     }
 
     fun newTab() {
@@ -117,6 +147,7 @@ fun BrowserScreen(onBack: () -> Unit) {
 
     fun closeTab(id: String) {
         store.remove(id)
+        webViewPool.remove(id)?.destroy()
         val i = tabs.indexOfFirst { it.id == id }
         if (i >= 0) tabs.removeAt(i)
         if (activeId == id) activeId = tabs.firstOrNull()?.id.orEmpty()
@@ -131,7 +162,7 @@ fun BrowserScreen(onBack: () -> Unit) {
                 title = { Text("مرورگر هوشمند") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "بازگشت")
                     }
                 },
                 actions = {
@@ -155,7 +186,7 @@ fun BrowserScreen(onBack: () -> Unit) {
                 return@Column
             }
 
-            // ── Chrome-style tab strip (always visible) ─────────────────
+            // ── Chrome-style tab strip: tabs then "+" at the END ────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -179,28 +210,18 @@ fun BrowserScreen(onBack: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        Text(
-                            t.title.take(14),
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                        )
+                        Text(t.title.take(14), style = MaterialTheme.typography.labelMedium, maxLines = 1)
                         Icon(
                             Icons.Filled.Close,
                             contentDescription = "بستن تب",
-                            modifier = Modifier
-                                .size(16.dp)
-                                .clickable { closeTab(t.id) },
+                            modifier = Modifier.size(16.dp).clickable { closeTab(t.id) },
                         )
                     }
                 }
-                // Trailing + inside the strip too (mirrors Chrome).
                 Icon(
                     Icons.Filled.Add,
                     contentDescription = "تب جدید",
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clickable { newTab() }
-                        .padding(2.dp),
+                    modifier = Modifier.size(22.dp).clickable { newTab() }.padding(2.dp),
                 )
             }
 
@@ -208,46 +229,48 @@ fun BrowserScreen(onBack: () -> Unit) {
                 tab = active,
                 store = store,
                 providerRepo = remember { ProviderRepository(context) },
-                autoPrefs = autoPrefs,
+                getWebView = { pooledWebView(active.id) },
+                updateTab = { transform -> updateTab(active.id, transform) },
+                onMessagesChanged = {
+                    val i = tabs.indexOfFirst { it.id == active.id }
+                    if (i >= 0) tabs[i] = store.get(active.id) ?: tabs[i]
+                },
                 chatVisible = chatVisible,
                 onToggleChat = { chatVisible = !chatVisible },
                 reverseApiOn = reverseApiOn,
                 onReverseApiToggle = { reverseApiOn = it; autoPrefs.reverseApiEnabled = it },
                 raeStatus = raeStatus,
                 onRaeStatus = { raeStatus = it },
-                onTabChanged = { persist(it) },
-                onMessagesChanged = {
-                    val i = tabs.indexOfFirst { it.id == active.id }
-                    if (i >= 0) tabs[i] = store.get(active.id) ?: tabs[i]
-                },
             )
         }
     }
 }
+
+private const val MAX_POOLED = 6
 
 @Composable
 private fun BrowserTabContent(
     tab: BrowserTab,
     store: BrowserTabStore,
     providerRepo: ProviderRepository,
-    autoPrefs: AutomationPrefs,
+    getWebView: () -> WebView,
+    updateTab: ((BrowserTab) -> BrowserTab) -> Unit,
+    onMessagesChanged: () -> Unit,
     chatVisible: Boolean,
     onToggleChat: () -> Unit,
     reverseApiOn: Boolean,
     onReverseApiToggle: (Boolean) -> Unit,
     raeStatus: String,
     onRaeStatus: (String) -> Unit,
-    onTabChanged: (BrowserTab) -> Unit,
-    onMessagesChanged: () -> Unit,
 ) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var urlInput by remember(tab.id) { mutableStateOf(tab.url) }
+    var canGoBack by remember { mutableStateOf(false) }
+    var canGoForward by remember { mutableStateOf(false) }
     var input by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var modelMenu by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
-    var pageTitle by remember(tab.id) { mutableStateOf(tab.title) }
 
     val modelEntries = remember {
         runCatching { providerRepo.resolvedAgentLoopEntries() }.getOrDefault(emptyList())
@@ -270,7 +293,7 @@ private fun BrowserTabContent(
         if (entry == null) {
             store.appendMessage(
                 tab.id,
-                BrowserChatMsg("assistant", "❌ هنوز مدلی انتخاب نشده. از منوی «انتخاب مدل» بالای پنل یک مدل/API انتخاب کن. اگر لیست خالی است، اول در تنظیمات → Providers یک API اضافه کن."),
+                BrowserChatMsg("assistant", "❌ هنوز مدلی انتخاب نشده. از منوی «انتخاب مدل» یک مدل/API انتخاب کن؛ اگر لیست خالی است اول در تنظیمات → Providers یک API اضافه کن."),
             )
             onMessagesChanged()
             return
@@ -279,16 +302,15 @@ private fun BrowserTabContent(
         onMessagesChanged()
         busy = true
 
-        fun finish(reply: String, model: String) {
-            store.appendMessage(tab.id, BrowserChatMsg("assistant", reply, model))
+        fun finish(reply: String) {
+            store.appendMessage(tab.id, BrowserChatMsg("assistant", reply, entry.model.displayName))
             onMessagesChanged()
             busy = false
         }
 
-        // Ask for page text with a guaranteed callback (fallback: no page).
         val wv = webViewRef
         if (wv == null) {
-            scope.launch { finish(callModel(providerRepo, entry, prompt, ""), entry.model.displayName) }
+            scope.launch { finish(callModel(providerRepo, entry, prompt, "")) }
             return
         }
         var answered = false
@@ -301,24 +323,29 @@ private fun BrowserTabContent(
                 ?.replace("\\\"", "\"")
                 ?.replace("\\\\", "\\")
                 .orEmpty()
-            scope.launch {
-                finish(callModel(providerRepo, entry, prompt, page), entry.model.displayName)
-            }
+            scope.launch { finish(callModel(providerRepo, entry, prompt, page)) }
         }
-        // Safety net: if the JS callback never fires, proceed without page.
         scope.launch {
             kotlinx.coroutines.delay(4000)
-            if (!answered && busy) finish(callModel(providerRepo, entry, prompt, ""), entry.model.displayName)
+            if (!answered && busy) finish(callModel(providerRepo, entry, prompt, ""))
         }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // ── URL / search bar (always visible) ───────────────────────────
+        // ── Omnibox (URL + search) + navigation, like Chrome ────────────
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
+            IconButton(
+                onClick = { webViewRef?.goBack() },
+                enabled = canGoBack,
+            ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "عقب") }
+            IconButton(
+                onClick = { webViewRef?.goForward() },
+                enabled = canGoForward,
+            ) { Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "جلو") }
             OutlinedTextField(
                 value = urlInput,
                 onValueChange = { urlInput = it },
@@ -339,36 +366,31 @@ private fun BrowserTabContent(
             }) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "برو") }
         }
 
-        // ── Page (top) ──────────────────────────────────────────────────
+        // ── Page (pooled WebView — survives tab switches) ───────────────
         Box(modifier = Modifier.fillMaxWidth().weight(if (chatVisible) 0.5f else 1f)) {
             AndroidView(
+                modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
-                    WebView(ctx).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        settings.loadWithOverviewMode = true
-                        settings.useWideViewPort = true
+                    getWebView().apply {
+                        // Rebind listeners each attach (pool reuse).
                         webViewClient = object : WebViewClient() {
                             override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
                                 url?.let {
                                     urlInput = it
-                                    onTabChanged(tab.copy(url = it))
+                                    updateTab { cur -> cur.copy(url = it, title = view?.title ?: cur.title) }
                                 }
-                                view?.title?.let {
-                                    pageTitle = it
-                                    onTabChanged(tab.copy(title = it))
-                                }
+                                canGoBack = view?.canGoBack() ?: false
+                                canGoForward = view?.canGoForward() ?: false
                             }
                         }
-                        if (tab.url.isNotBlank()) loadUrl(tab.url)
+                        if (url.isNullOrBlank() && tab.url.isNotBlank()) loadUrl(tab.url)
                     }.also { webViewRef = it }
                 },
-                modifier = Modifier.fillMaxSize(),
-                onRelease = { webViewRef = null },
+                onRelease = { /* pooled — do NOT destroy here */ },
             )
         }
 
-        // ── AI panel (bottom, collapsible) ─────────────────────────────
+        // ── AI panel + extensions (bottom, collapsible) ─────────────────
         if (chatVisible) {
             Box(modifier = Modifier.fillMaxWidth().weight(0.5f)) {
                 Column(modifier = Modifier.fillMaxSize()) {
@@ -377,7 +399,7 @@ private fun BrowserTabContent(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            "دستیار وب ▾",
+                            if (chatVisible) "دستیار وب ▾" else "دستیار وب ▴",
                             style = MaterialTheme.typography.labelLarge,
                             modifier = Modifier.clickable(onClick = onToggleChat),
                         )
@@ -426,12 +448,7 @@ private fun BrowserTabContent(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
-                                raeStatus,
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 3,
-                            )
+                            Text(raeStatus, style = MaterialTheme.typography.labelSmall, modifier = Modifier.weight(1f), maxLines = 3)
                             TextButton(onClick = {
                                 scope.launch {
                                     onRaeStatus("در حال نصب (چند دقیقه)…")
@@ -442,11 +459,12 @@ private fun BrowserTabContent(
                         }
                     }
 
+                    val msgs = remember(tab.updatedAt, tab.messages.size) { tab.messages }
                     LazyColumn(
                         modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        items(tab.messages) { m ->
+                        items(msgs) { m ->
                             Card(modifier = Modifier.fillMaxWidth()) {
                                 Text(
                                     (if (m.role == "user") "🧑 " else "🤖 ") + m.text,
