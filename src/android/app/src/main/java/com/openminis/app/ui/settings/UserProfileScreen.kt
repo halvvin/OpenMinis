@@ -127,7 +127,7 @@ fun UserProfileScreen(onBack: () -> Unit) {
                             name = name.trim(),
                             age = age.trim(),
                             occupation = occupation.trim(),
-                            field = field.trim(),
+                            workField = field.trim(),
                             skills = skills.trim(),
                             interests = interests.trim(),
                             goals = goals.trim(),

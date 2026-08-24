@@ -19,14 +19,14 @@ data class UserProfile(
     val name: String = "",
     val age: String = "",
     val occupation: String = "",
-    val field: String = "",
+    val workField: String = "",
     val skills: String = "",
     val interests: String = "",
     val goals: String = "",
     val notes: String = "",
 ) {
     val isEmpty: Boolean
-        get() = listOf(name, age, occupation, field, skills, interests, goals, notes)
+        get() = listOf(name, age, occupation, workField, skills, interests, goals, notes)
             .all { it.isBlank() }
 
     /**
@@ -39,7 +39,7 @@ data class UserProfile(
             if (name.isNotBlank()) add("- Name: $name")
             if (age.isNotBlank()) add("- Age: $age")
             if (occupation.isNotBlank()) add("- Occupation: $occupation")
-            if (field.isNotBlank()) add("- Field of work: $field")
+            if (workField.isNotBlank()) add("- Field of work: $workField")
             if (skills.isNotBlank()) add("- Skills: $skills")
             if (interests.isNotBlank()) add("- Interests: $interests")
             if (goals.isNotBlank()) add("- Goals: $goals")
@@ -70,7 +70,7 @@ depth and examples — do not repeat it back verbatim):
                 name = o.optString("name"),
                 age = o.optString("age"),
                 occupation = o.optString("occupation"),
-                field = o.optString("field"),
+                workField = o.optString("field"),
                 skills = o.optString("skills"),
                 interests = o.optString("interests"),
                 goals = o.optString("goals"),
