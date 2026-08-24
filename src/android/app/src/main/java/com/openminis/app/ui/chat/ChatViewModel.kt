@@ -26,6 +26,8 @@ import com.openminis.app.data.ContextOffload
 import com.openminis.app.data.ContextPolicy
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.FileMentionIndex
+import com.openminis.app.data.KeepWorkingPrefs
+import com.openminis.app.data.UserProfileStore
 import com.openminis.app.data.db.CompactMarkerEntity
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.AgentToolDefinition
@@ -65,6 +67,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -5594,6 +5597,7 @@ class ChatViewModel(
                         // Skipped on cancel: cancelled job won't reach here.
                         drainQueuedPrompts(provider, systemPrompt, fallbackProviders, activeFallbackStrategy)
                         AppLogger.info(TAG_STREAM, "send drainQueuedPrompts RETURN")
+                        keepWorkingOnTaskCompleted()
                     } catch (e: CancellationException) {
                         AppLogger.info(TAG_STREAM, "send runAgentLoop CANCELLED")
                         Log.d(TAG, "Agent loop cancelled")
@@ -5603,6 +5607,7 @@ class ChatViewModel(
                         setInlineError(e.message ?: "Unknown error")
                         // T298: completion notifier should show the ❌ variant.
                         SessionActivityTracker.markStreamError(activeSessionId)
+                        keepWorkingOnError(e)
                     } finally {
                         AppLogger.info(TAG_STREAM, "send streamJob FINALLY enter")
                         // [T-android-overlay-reply-status-34599] Surface
@@ -5688,6 +5693,73 @@ class ChatViewModel(
             // No assistant message yet — fall back to top-level error
             _error.value = safeError
         }
+    }
+
+    // ─── [T-keep-working-engine] Auto-continue on failed turns ──────────
+
+    private fun keepWorkingPrefs(): com.openminis.app.data.KeepWorkingPrefs =
+        com.openminis.app.data.KeepWorkingPrefs.get(context)
+
+    /** Called when an agent turn completes WITHOUT a terminal error — the engine considers the task done and resets its counters. */
+    private fun keepWorkingOnTaskCompleted() {
+        try {
+            val prefs = keepWorkingPrefs()
+            if (prefs.activeSessionId == realSessionId.ifEmpty { sessionId }) {
+                prefs.resetTaskState()
+            }
+        } catch (_: Exception) { /* never break the chat path */ }
+    }
+
+    /**
+     * Called from the terminal-error catch of the main send path. When the
+     * engine is enabled and the error looks recoverable (network loss, rate
+     * limit, 5xx, timeout), schedules the configured continuation command to
+     * be re-sent after the configured interval, up to maxAttempts times.
+     */
+    private fun keepWorkingOnError(cause: Exception) {
+        try {
+            val prefs = keepWorkingPrefs()
+            val config = prefs.load()
+            if (!config.enabled) return
+            if (!isRecoverableForKeepWorking(cause)) return
+            val sid = realSessionId.ifEmpty { sessionId }
+            if (sid.isEmpty()) return
+            if (prefs.activeSessionId != sid) {
+                prefs.activeSessionId = sid
+                prefs.attemptCount = 0
+            }
+            val attempt = prefs.attemptCount + 1
+            if (attempt > config.maxAttempts) {
+                appendSystemInfo(
+                    text = "⛔ موتور ادامه خودکار: حداکثر تلاش‌ها (${config.maxAttempts}) به پایان رسید.",
+                    iconKind = "error",
+                )
+                prefs.resetTaskState()
+                return
+            }
+            prefs.attemptCount = attempt
+            appendSystemInfo(
+                text = "🔄 موتور ادامه خودکار: تلاش $attempt از ${config.maxAttempts} پس از ${config.intervalSeconds} ثانیه…",
+                iconKind = "autorenew",
+            )
+            viewModelScope.launch {
+                delay(config.intervalSeconds * 1000L)
+                sendMessage(config.command, skipContextCheck = true)
+            }
+        } catch (_: Exception) { /* engine must never break the chat path */ }
+    }
+
+    /** Heuristic: errors worth auto-continuing (transient infra/provider failures). */
+    private fun isRecoverableForKeepWorking(e: Exception): Boolean {
+        if (e is kotlinx.coroutines.CancellationException) return false
+        if (e is java.io.IOException) return true
+        val msg = (e.message ?: "").lowercase()
+        if (msg.isEmpty()) return false
+        return listOf(
+            "timeout", "timed out", "connect", "network", "rate", "429",
+            "502", "503", "504", "econn", "unavailable", "overloaded",
+            "socket", "stream",
+        ).any { msg.contains(it) }
     }
 
     /**
@@ -9090,6 +9162,12 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         // to the memory feature.
         val globalMemoryFragment = if (memoryOn) memoryRepository?.loadGlobalMemoryFragment() else null
         val dailyMemoryFragment = if (memoryOn) memoryRepository?.loadRecentDailyMemoryFragment() else null
+        // [T-user-profile] Personalisation context. Returns null when the
+        // feature is disabled or the profile is empty, keeping the prompt
+        // byte-stable (cache-friendly) for users who don't use it.
+        val userProfileFragment = try {
+            com.openminis.app.data.UserProfileStore.get(context).promptSection()
+        } catch (_: Exception) { null }
 
         return buildString {
             append(base)
@@ -9108,6 +9186,10 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             if (dailyMemoryFragment != null) {
                 append("\n\n")
                 append(dailyMemoryFragment)
+            }
+            if (userProfileFragment != null) {
+                append("\n\n")
+                append(userProfileFragment)
             }
             // Runtime context goes last so the prefix above stays byte-stable
             // across requests within the same day. Keep ordering deterministic

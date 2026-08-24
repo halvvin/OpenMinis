@@ -148,6 +148,10 @@ object Routes {
     const val MCP = "mcp"
     /** [T-soul-md] SOUL.md editor. */
     const val SOUL = "soul"
+    /** [T-user-profile] User Profile editor (personalisation context). */
+    const val USER_PROFILE = "user_profile"
+    /** [T-keep-working-engine] Keep Working (auto-continue) settings. */
+    const val KEEP_WORKING = "keep_working"
     const val MEMORY_FILE_EDIT = "memory_file/{fileName}/{isGlobal}"
     const val PERMISSIONS = "permissions"
     /**
@@ -581,6 +585,8 @@ fun AppNavigation(
                 onMemoryClick = { navController.safeNavigate(Routes.MEMORY) },
                 onMcpClick = { navController.safeNavigate(Routes.MCP) },
                 onSoulClick = { navController.safeNavigate(Routes.SOUL) },
+                onProfileClick = { navController.safeNavigate(Routes.USER_PROFILE) },
+                onKeepWorkingClick = { navController.safeNavigate(Routes.KEEP_WORKING) },
                 onPermissionsClick = { navController.safeNavigate(Routes.PERMISSIONS) },
                 onUsageClick = { navController.safeNavigate(Routes.USAGE_STATS) },
                 onAppearanceClick = { navController.safeNavigate(Routes.APPEARANCE) },
@@ -1124,6 +1130,20 @@ fun AppNavigation(
         // [T-soul-md] SOUL.md editor.
         composable(Routes.SOUL) {
             com.openminis.app.ui.settings.SoulSettingsScreen(
+                onBack = { navController.safePopBackStack() },
+            )
+        }
+
+        // [T-user-profile] User Profile editor.
+        composable(Routes.USER_PROFILE) {
+            com.openminis.app.ui.settings.UserProfileScreen(
+                onBack = { navController.safePopBackStack() },
+            )
+        }
+
+        // [T-keep-working-engine] Auto-continue engine settings.
+        composable(Routes.KEEP_WORKING) {
+            com.openminis.app.ui.settings.KeepWorkingSettingsScreen(
                 onBack = { navController.safePopBackStack() },
             )
         }

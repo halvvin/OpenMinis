@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BarChart
+import androidx.compose.material.icons.outlined.Autorenew
 import androidx.compose.material.icons.outlined.BatteryFull
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Dashboard
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Settings
@@ -86,6 +88,10 @@ fun SettingsScreen(
     // Agent Runtime section; default no-op for callers that haven't wired
     // the route yet.
     onSoulClick: () -> Unit = {},
+    // [T-user-profile] User Profile editor row.
+    onProfileClick: () -> Unit = {},
+    // [T-keep-working-engine] Keep Working (auto-continue) settings row.
+    onKeepWorkingClick: () -> Unit = {},
     onPermissionsClick: () -> Unit = {},
     onUsageClick: () -> Unit = {},
     onAppearanceClick: () -> Unit = {},
@@ -185,6 +191,22 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_soul),
                     subtitle = stringResource(R.string.settings_soul_subtitle),
                     onClick = onSoulClick,
+                )
+                // [T-user-profile] Personalisation profile — right after SOUL.
+                SettingsItem(
+                    icon = Icons.Outlined.Person,
+                    iconColor = Color(0xFF34C759),
+                    title = "پروفایل کاربر",
+                    subtitle = "معرفی خودت؛ پاسخ‌ها شخصی‌سازی می‌شوند",
+                    onClick = onProfileClick,
+                )
+                // [T-keep-working-engine] Auto-continue engine.
+                SettingsItem(
+                    icon = Icons.Outlined.Autorenew,
+                    iconColor = Color(0xFFFF375F),
+                    title = "موتور ادامه خودکار",
+                    subtitle = "ادامه‌ی خودکار وظایف ناتمام پس از خطا / قطعی",
+                    onClick = onKeepWorkingClick,
                 )
                 SettingsItem(
                     icon = Icons.Outlined.Psychology,
