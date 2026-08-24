@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,6 +67,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -74,6 +76,7 @@ import com.openminis.app.automation.AutomationPrefs
 import com.openminis.app.browser.BrowserChatMsg
 import com.openminis.app.browser.BrowserTab
 import com.openminis.app.browser.BrowserTabStore
+import com.openminis.app.browser.ReverseApi
 import com.openminis.app.data.repository.ProviderRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -636,31 +639,34 @@ private fun FloatingAiPanel(
 
     if (!expanded) {
         // Collapsed bubble — tap to open, drag to move.
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset { IntOffset(offsetX.toInt(), offsetY.toInt()) }
-                .size(52.dp)
-                .background(MaterialTheme.colorScheme.primary, CircleShape)
-                .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
-                .combinedClickable(
-                    onClick = { expanded = true },
-                    onLongClick = { expanded = true },
-                )
-                .pointerInput(Unit) {
-                    detectDragGestures { change, drag ->
-                        change.consume()
-                        offsetX += drag.x
-                        offsetY += drag.y
-                    }
-                },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text("🤖", style = MaterialTheme.typography.titleLarge)
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset { IntOffset(offsetX.toInt(), offsetY.toInt()) }
+                    .size(52.dp)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
+                    .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
+                    .combinedClickable(
+                        onClick = { expanded = true },
+                        onLongClick = { expanded = true },
+                    )
+                    .pointerInput(Unit) {
+                        detectDragGestures { change, drag ->
+                            change.consume()
+                            offsetX += drag.x
+                            offsetY += drag.y
+                        }
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("🤖", style = MaterialTheme.typography.titleLarge)
+            }
         }
         return
     }
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Card(
         modifier = Modifier
             .align(Alignment.TopEnd)
@@ -751,6 +757,7 @@ private fun FloatingAiPanel(
             }
         }
     }
+    }
 }
 
 // Small helper to keep the panel code readable.
@@ -761,6 +768,32 @@ private fun entryIdFor(modelTitle: String, repo: ProviderRepository): String =
 private fun scopeLaunch(block: suspend kotlinx.coroutines.CoroutineScope.() -> Unit) {
     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch(block = block)
 }
+
+/** One-shot LLM call with optional page context. Fail-soft by design. */
+private suspend fun callModel(
+    repo: ProviderRepository,
+    entry: com.openminis.app.data.model.ModelEntry,
+    prompt: String,
+    pageText: String,
+): String = runCatching {
+    val instance = repo.instance(entry.providerInstanceId)
+    val apiKey = instance?.let { repo.usableApiKey(it) }
+    if (instance == null || apiKey == null) return "❌ کلید API برای «${entry.model.displayName}» در دسترس نیست — تنظیمات → Providers را چک کن."
+    val provider = com.openminis.app.provider.ProviderFactory.create(instance, apiKey, entry.model, null)
+    val sys = "تو دستیار وبِ داخل مرورگر هستی. متن صفحه‌ی فعلی که کاربر می‌بیند ضمیمه شده است؛ برای ترجمه، خلاصه‌سازی، استخراج لینک و فایل و پاسخ درباره‌ی صفحه از آن استفاده کن. فارسی جواب بده مگر خلافش خواسته شود."
+    val user = if (pageText.isNotBlank()) "$prompt\n\n[متن صفحه]:\n$pageText" else prompt
+    val resp = provider.sendMessage(
+        messages = listOf(
+            com.openminis.app.data.model.LLMMessage(
+                role = com.openminis.app.data.model.LLMMessage.Role.USER,
+                content = user,
+            )
+        ),
+        systemPrompt = sys,
+        maxTokens = 4096,
+    )
+    resp.text.ifBlank { "(پاسخ خالی از مدل)" }
+}.getOrElse { "❌ ${it.message ?: "خطای ناشناخته"}" }
 
 /** Reverse API extension panel: HAR stats + client generation. */
 @Composable
