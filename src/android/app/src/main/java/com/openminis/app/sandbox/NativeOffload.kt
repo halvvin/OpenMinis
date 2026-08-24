@@ -52,7 +52,7 @@ fun interface NativeOffloadHandler {
 
 object NativeOffloadServer {
     private const val TAG = "NativeOffloadServer"
-    private const val SOCKET_NAME = "native-offload"
+    private const val DEFAULT_SOCKET_NAME = "native-offload"
     private const val MAGIC_REQ = 0x46464F4E  // 'N' 'O' 'F' 'F' little-endian
     private const val MAGIC_RSP = 0x52464F4E  // 'N' 'O' 'F' 'R'
     private const val VERSION = 1
@@ -72,7 +72,23 @@ object NativeOffloadServer {
     /** Run the opportunistic sweep every N replies, not on every single one. */
     private const val SWEEP_EVERY_N_REPLIES = 50L
 
-    const val socketName: String = SOCKET_NAME
+    /**
+     * Abstract-socket name. [T-fork-socket-namespace] Abstract UNIX sockets
+     * share ONE global namespace per kernel — two different apps binding the
+     * same name collide (EADDRINUSE), which previously crashed any
+     * re-packaged fork whenever the official Minis was running. The name is
+     * therefore prefixed with the applicationId via [init] (called from
+     * MinisApp.onCreate BEFORE [start]), so every build gets its own private
+     * namespace entry. Falls back to the upstream name when [init] was never
+     * called (e.g. unit tests).
+     */
+    @Volatile
+    var socketName: String = DEFAULT_SOCKET_NAME
+        private set
+
+    fun init(packageName: String) {
+        socketName = "$packageName.native-offload"
+    }
 
     private val handlers = ConcurrentHashMap<String, NativeOffloadHandler>()
     private val counter = AtomicLong(0)
@@ -107,14 +123,14 @@ object NativeOffloadServer {
         // 100-300ms window.
         val s = bindWithRetry()
             ?: throw java.io.IOException(
-                "failed to bind abstract socket '$SOCKET_NAME' after retries — " +
+                "failed to bind abstract socket '$socketName' after retries — " +
                 "previous process holding the namespace?",
             )
         serverSocket = s
         acceptThread = thread(name = "native-offload-accept", isDaemon = true) {
             runAcceptLoop(s)
         }
-        Log.i(TAG, "listening on abstract socket '$SOCKET_NAME' " +
+        Log.i(TAG, "listening on abstract socket '$socketName' " +
             "handlers=${handlers.keys.sorted()} tmpDir=${rootfsTmpDir?.absolutePath}")
 
         // [T-android-offload-tmp-leak] Sweep reply files orphaned by earlier
@@ -180,7 +196,7 @@ object NativeOffloadServer {
         for ((attempt, delay) in delays.withIndex()) {
             if (delay > 0) Thread.sleep(delay)
             try {
-                return LocalServerSocket(SOCKET_NAME)
+                return LocalServerSocket(socketName)
             } catch (e: java.io.IOException) {
                 Log.w(TAG, "bind attempt ${attempt + 1}/${delays.size} failed: ${e.message}")
             }

@@ -551,6 +551,11 @@ class MinisApp : Application(), ImageLoaderFactory {
             )
         }
 
+        // [T-fork-socket-namespace] Namespace the abstract offload socket by
+        // applicationId BEFORE the server binds, so this fork never collides
+        // with the official Minis app (both would fight over 'native-offload').
+        NativeOffloadServer.init(packageName)
+
         NativeOffloadServer.start(RootfsManager.getInstance(this).rootfsDir)
 
         // Initialize session activity tracker for foreground service management
