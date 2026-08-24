@@ -34,7 +34,9 @@ import java.util.concurrent.TimeUnit
 object UpdateChecker {
 
     private const val TAG = "UpdateChecker"
-    private const val OWNER = "OpenMinis"
+    // [T-fork-repoint] Update checks hit the OWNER'S fork, never upstream —
+    // an official release must never overwrite this fork.
+    private const val OWNER = "halvvin"
     // T133: the public repo is OpenMinis/OpenMinis (org + repo share a name).
     // Previously pointed at OpenMinis/MinisApp, which is the private dev
     // mirror — every API call 404'd, which we mistranslated as "no release
@@ -257,8 +259,10 @@ object UpdateChecker {
         }
     }
 
-    /** Public so UI can deep-link users to manual download when GitHub is blocked. */
-    const val RELEASES_URL: String = "https://github.com/OpenMinis/OpenMinis/releases"
+    /** Public so UI can deep-link users to manual download when GitHub is blocked.
+     *  [T-fork-repoint] Points to the OWNER'S fork — updating must never pull
+     *  the upstream official APK over this fork. */
+    const val RELEASES_URL: String = "https://github.com/halvvin/OpenMinis/releases"
 
     /** Returns (downloadUrl, sizeBytes) for the first .apk asset, or (null, 0). */
     private fun findApkAsset(assets: JSONArray?): Pair<String?, Long> {

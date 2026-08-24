@@ -236,12 +236,12 @@ private fun ChooseProviderScreen(
         ) {
             providerDisplayOrder.forEachIndexed { index, type ->
                 val displayTitle = when (type) {
-                    ProviderType.openAI -> "OpenAI / Compatible API"
-                    ProviderType.anthropic -> "Anthropic / Compatible API"
-                    ProviderType.gemini -> "Google Gemini"
-                    ProviderType.openRouter -> "OpenRouter"
-                    ProviderType.xAI -> "xAI (Grok)"
-                    ProviderType.kimiCode -> "Kimi Code"
+                    ProviderType.openAI -> stringResource(R.string.add_provider_type_openai)
+                    ProviderType.anthropic -> stringResource(R.string.add_provider_type_anthropic)
+                    ProviderType.gemini -> stringResource(R.string.add_provider_type_gemini)
+                    ProviderType.openRouter -> stringResource(R.string.add_provider_type_openrouter)
+                    ProviderType.xAI -> stringResource(R.string.add_provider_type_xai)
+                    ProviderType.kimiCode -> stringResource(R.string.add_provider_type_kimi)
                 }
                 // Describe which vendors each protocol supports, rather than a
                 // raw built-in model count.

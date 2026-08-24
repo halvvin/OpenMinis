@@ -121,7 +121,24 @@ fun KeepWorkingSettingsScreen(onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Switch(checked = enabled, onCheckedChange = { enabled = it })
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = {
+                        enabled = it
+                        // [T-kw-write-through] Persist immediately so the
+                        // engine state never reverts on navigation.
+                        prefs.save(
+                            KeepWorkingConfig(
+                                enabled = it,
+                                command = command.ifBlank { KeepWorkingConfig().command },
+                                intervalSeconds = intervalToSeconds(intervalValue, intervalUnit),
+                                maxAttempts = attemptsText.toIntOrNull()?.coerceIn(1, 100) ?: 5,
+                                chatFilterEnabled = chatFilterEnabled,
+                                targetChats = targetChats,
+                            )
+                        )
+                    },
+                )
             }
 
             OutlinedTextField(
@@ -202,7 +219,22 @@ fun KeepWorkingSettingsScreen(onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Switch(checked = chatFilterEnabled, onCheckedChange = { chatFilterEnabled = it })
+                Switch(
+                    checked = chatFilterEnabled,
+                    onCheckedChange = {
+                        chatFilterEnabled = it
+                        prefs.save(
+                            KeepWorkingConfig(
+                                enabled = enabled,
+                                command = command.ifBlank { KeepWorkingConfig().command },
+                                intervalSeconds = intervalToSeconds(intervalValue, intervalUnit),
+                                maxAttempts = attemptsText.toIntOrNull()?.coerceIn(1, 100) ?: 5,
+                                chatFilterEnabled = it,
+                                targetChats = targetChats,
+                            )
+                        )
+                    },
+                )
             }
 
             if (chatFilterEnabled) {

@@ -5,6 +5,13 @@
     <string name="settings">Settings</string>
     <string name="providers">Providers</string>
     <string name="add_provider">Add Provider</string>
+    <!-- [T-fa-locale] Provider chooser titles (previously hard-coded in AddProviderScreen). -->
+    <string name="add_provider_type_openai">OpenAI / Compatible API</string>
+    <string name="add_provider_type_anthropic">Anthropic / Compatible API</string>
+    <string name="add_provider_type_gemini">Google Gemini</string>
+    <string name="add_provider_type_openrouter">OpenRouter</string>
+    <string name="add_provider_type_xai">xAI (Grok)</string>
+    <string name="add_provider_type_kimi">Kimi Code</string>
     <string name="appearance">Appearance</string>
     <string name="no_sessions">No conversations yet</string>
     <string name="no_providers">Add a provider to get started</string>

@@ -58,6 +58,7 @@ import com.openminis.app.browser.BrowserTab
 import com.openminis.app.browser.BrowserTabStore
 import com.openminis.app.browser.ReverseApi
 import com.openminis.app.data.repository.ProviderRepository
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -228,7 +229,9 @@ fun BrowserScreen(onBack: () -> Unit) {
             BrowserTabContent(
                 tab = active,
                 store = store,
-                providerRepo = remember { ProviderRepository(context) },
+                providerRepo = remember {
+                    (context.applicationContext as com.openminis.app.MinisApp).providerRepository
+                },
                 getWebView = { pooledWebView(active.id) },
                 updateTab = { transform -> updateTab(active.id, transform) },
                 onMessagesChanged = {
@@ -272,13 +275,18 @@ private fun BrowserTabContent(
     var modelMenu by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
 
-    val modelEntries = remember {
-        runCatching { providerRepo.resolvedAgentLoopEntries() }.getOrDefault(emptyList())
+    val modelEntries = remember { mutableStateOf<List<com.openminis.app.data.model.ModelEntry>>(emptyList()) }
+    // [T-browser-models-reactive] The app-scoped ProviderRepository loads its
+    // config ASYNC — reading once in remember{} always saw the empty initial
+    // state (the "مدل انتخاب نشده" bug). Wait for the load, then track it.
+    LaunchedEffect(Unit) {
+        providerRepo.configLoaded.first { it }
+        modelEntries.value = runCatching { providerRepo.resolvedAgentLoopEntries() }.getOrDefault(emptyList())
     }
     var selectedEntryId by remember(tab.id) {
-        mutableStateOf(modelEntries.firstOrNull()?.id.orEmpty())
+        mutableStateOf(modelEntries.value.firstOrNull()?.id.orEmpty())
     }
-    val selectedEntry = modelEntries.firstOrNull { it.id == selectedEntryId }
+    val selectedEntry = modelEntries.value.firstOrNull { it.id == selectedEntryId }
 
     fun normalizeUrl(raw: String): String {
         val u = raw.trim()
@@ -368,6 +376,26 @@ private fun BrowserTabContent(
 
         // ── Page (pooled WebView — survives tab switches) ───────────────
         Box(modifier = Modifier.fillMaxWidth().weight(if (chatVisible) 0.5f else 1f)) {
+            if (tab.url.isBlank()) {
+                // Start page — no blank white void.
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text("🌐", style = MaterialTheme.typography.displayMedium)
+                    Text(
+                        "آدرس یا عبارت جستجو را در نوار بالا وارد کن",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "مثلاً: wikipedia.org  یا  اخبار امروز",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
@@ -388,6 +416,7 @@ private fun BrowserTabContent(
                 },
                 onRelease = { /* pooled — do NOT destroy here */ },
             )
+            }
         }
 
         // ── AI panel + extensions (bottom, collapsible) ─────────────────
@@ -412,13 +441,13 @@ private fun BrowserTabContent(
                                 )
                             }
                             DropdownMenu(expanded = modelMenu, onDismissRequest = { modelMenu = false }) {
-                                if (modelEntries.isEmpty()) {
+                                if (modelEntries.value.isEmpty()) {
                                     DropdownMenuItem(
                                         text = { Text("(لیست خالی — اول یک API تنظیم کن)") },
                                         onClick = { modelMenu = false },
                                     )
                                 }
-                                modelEntries.forEach { e ->
+                                modelEntries.value.forEach { e ->
                                     DropdownMenuItem(
                                         text = { Text(e.model.displayName, maxLines = 1) },
                                         onClick = { selectedEntryId = e.id; modelMenu = false },

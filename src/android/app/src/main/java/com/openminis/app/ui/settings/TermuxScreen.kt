@@ -37,6 +37,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -69,6 +70,9 @@ fun TermuxScreen(onBack: () -> Unit) {
     var loaded by remember { mutableStateOf(false) }
     val history = remember { mutableStateListOf<String>() }
     var historyIdx by remember { mutableStateOf(-1) }
+    // Auto-open the keyboard when entering the terminal.
+    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(loaded) { if (loaded) focusRequester.requestFocus() }
 
     LaunchedEffect(Unit) {
         enabled = prefs.termuxEnabled
@@ -159,25 +163,6 @@ fun TermuxScreen(onBack: () -> Unit) {
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                OutlinedTextField(
-                    value = command,
-                    onValueChange = { command = it },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("دستور Termux… مثلاً pkg install python") },
-                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    singleLine = true,
-                )
-                IconButton(
-                    onClick = { val c = command.trim(); if (c.isNotEmpty()) { command = ""; runAndRemember(c) } },
-                    enabled = !testing && command.isNotBlank(),
-                ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "اجرا") }
-            }
-
             // ── Terminal key row: history ↑/↓ + shell characters ────────
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -203,6 +188,25 @@ fun TermuxScreen(onBack: () -> Unit) {
                         }
                     }) { Text(k, style = MaterialTheme.typography.labelMedium) }
                 }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                OutlinedTextField(
+                    value = command,
+                    onValueChange = { command = it },
+                    modifier = Modifier.weight(1f).focusRequester(focusRequester),
+                    placeholder = { Text("دستور Termux… مثلاً pkg install python") },
+                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    singleLine = true,
+                )
+                IconButton(
+                    onClick = { val c = command.trim(); if (c.isNotEmpty()) { command = ""; runAndRemember(c) } },
+                    enabled = !testing && command.isNotBlank(),
+                ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "اجرا") }
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -72,6 +72,19 @@ fun UserProfileScreen(onBack: () -> Unit) {
         loaded = true
     }
 
+    /** Snapshot of the current form state as a persistable profile. */
+    fun buildProfile() = UserProfile(
+        enabled = enabled,
+        name = name.trim(),
+        age = age.trim(),
+        occupation = occupation.trim(),
+        workField = field.trim(),
+        skills = skills.trim(),
+        interests = interests.trim(),
+        goals = goals.trim(),
+        notes = notes.trim(),
+    )
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -103,7 +116,17 @@ fun UserProfileScreen(onBack: () -> Unit) {
                     "فعال (ارسال به مدل در ابتدای هر گفتگو)",
                     style = MaterialTheme.typography.bodyLarge,
                 )
-                Switch(checked = enabled, onCheckedChange = { enabled = it })
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = {
+                        enabled = it
+                        // [T-profile-toggle-write-through] Persist IMMEDIATELY on
+                        // toggle — previously the value only reached disk via the
+                        // Save button, so leaving the screen any other way (back
+                        // gesture, navigation) silently reverted the switch.
+                        store.save(buildProfile())
+                    },
+                )
             }
 
             Text(
@@ -123,19 +146,7 @@ fun UserProfileScreen(onBack: () -> Unit) {
 
             Button(
                 onClick = {
-                    store.save(
-                        UserProfile(
-                            enabled = enabled,
-                            name = name.trim(),
-                            age = age.trim(),
-                            occupation = occupation.trim(),
-                            workField = field.trim(),
-                            skills = skills.trim(),
-                            interests = interests.trim(),
-                            goals = goals.trim(),
-                            notes = notes.trim(),
-                        )
-                    )
+                    store.save(buildProfile())
                     onBack()
                 },
                 modifier = Modifier
