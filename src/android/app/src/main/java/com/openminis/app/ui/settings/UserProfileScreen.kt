@@ -63,7 +63,7 @@ fun UserProfileScreen(onBack: () -> Unit) {
         name = p.name
         age = p.age
         occupation = p.occupation
-        field = p.field
+        field = p.workField
         skills = p.skills
         interests = p.interests
         goals = p.goals

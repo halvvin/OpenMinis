@@ -55,7 +55,7 @@ depth and examples — do not repeat it back verbatim):
         put("name", name)
         put("age", age)
         put("occupation", occupation)
-        put("field", field)
+        put("field", workField)
         put("skills", skills)
         put("interests", interests)
         put("goals", goals)
