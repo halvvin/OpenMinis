@@ -23,8 +23,10 @@ ALPINE_URL="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/releases/aa
 # Termux package index; the pinned version below rots as Termux bumps.
 PROOT_VERSION="5.1.107-70"
 PROOT_REPO="https://packages.termux.dev/apt/termux-main"
-RESOLVED="$(curl -fsSL "$PROOT_REPO/dists/stable/main/binary-aarch64/Packages" 2>/dev/null \
-    | awk '/^Package: proot$/{f=1} f&&/^Filename: /{print $2; exit}')"
+# Non-fatal: pipefail+curl SIGPIPE (exit 23) must never abort the script —
+# the pinned fallback URL below covers resolution failures.
+RESOLVED="$( { curl -fsSL -m 15 "$PROOT_REPO/dists/stable/main/binary-aarch64/Packages" 2>/dev/null || true; } \
+    | { awk '/^Package: proot$/{f=1} f&&/^Filename: /{print $2; exit}' || true; })"
 if [ -n "$RESOLVED" ]; then
     PROOT_DEB_URL="$PROOT_REPO/$RESOLVED"
 else
