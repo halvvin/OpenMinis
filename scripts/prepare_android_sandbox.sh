@@ -19,8 +19,17 @@ ALPINE_RELEASE="3.21.3"
 ALPINE_URL="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/releases/aarch64/alpine-minirootfs-${ALPINE_RELEASE}-aarch64.tar.gz"
 
 # Termux proot package — aarch64 static binary
+# [T-ci-proot-resolve] Resolve the CURRENT version dynamically from the
+# Termux package index; the pinned version below rots as Termux bumps.
 PROOT_VERSION="5.1.107-70"
-PROOT_DEB_URL="https://packages.termux.dev/apt/termux-main/pool/main/p/proot/proot_${PROOT_VERSION}_aarch64.deb"
+PROOT_REPO="https://packages.termux.dev/apt/termux-main"
+RESOLVED="$(curl -fsSL "$PROOT_REPO/dists/stable/main/binary-aarch64/Packages" 2>/dev/null \
+    | awk '/^Package: proot$/{f=1} f&&/^Filename: /{print $2; exit}')"
+if [ -n "$RESOLVED" ]; then
+    PROOT_DEB_URL="$PROOT_REPO/$RESOLVED"
+else
+    PROOT_DEB_URL="$PROOT_REPO/pool/main/p/proot/proot_${PROOT_VERSION}_aarch64.deb"
+fi
 
 mkdir -p "$ASSETS_DIR"
 
