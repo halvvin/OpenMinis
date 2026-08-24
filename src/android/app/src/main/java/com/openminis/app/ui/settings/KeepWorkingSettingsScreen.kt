@@ -1,9 +1,12 @@
 package com.openminis.app.ui.settings
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -12,8 +15,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -60,6 +64,7 @@ fun KeepWorkingSettingsScreen(onBack: () -> Unit) {
     var chatFilterEnabled by remember { mutableStateOf(false) }
     var targetChats by remember { mutableStateOf(emptySet<String>()) }
     var newChatName by remember { mutableStateOf("") }
+    var unitMenu by remember { mutableStateOf(false) }
     var loaded by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -76,16 +81,9 @@ fun KeepWorkingSettingsScreen(onBack: () -> Unit) {
         loaded = true
     }
 
-    fun unitToSeconds(): Long {
-        val v = intervalValue.toLongOrNull() ?: return 30L
-        val factor = when (intervalUnit) {
-            "دقیقه" -> 60L
-            "ساعت" -> 3600L
-            "روز" -> 86_400L
-            else -> 1L
-        }
-        return (v * factor).coerceIn(5L, 31_536_000L)
-    }
+    fun unitToSeconds(): Long = intervalToSeconds(intervalValue, intervalUnit)
+
+    fun unitToSecondsPreview(): Long = unitToSeconds()
 
     Scaffold(
         topBar = {
@@ -105,7 +103,8 @@ fun KeepWorkingSettingsScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp)
+                .imePadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
@@ -133,7 +132,7 @@ fun KeepWorkingSettingsScreen(onBack: () -> Unit) {
                 minLines = 2,
             )
 
-            // ── Interval: value + unit, no artificial cap ─────────────────
+            // ── Interval: value + unit dropdown, no artificial cap ────────
             Text("فاصله بین تلاش‌ها", style = MaterialTheme.typography.titleSmall)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -148,16 +147,36 @@ fun KeepWorkingSettingsScreen(onBack: () -> Unit) {
                     modifier = Modifier.weight(1f),
                     singleLine = true,
                 )
-                Row(modifier = Modifier.weight(1.4f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    listOf("ثانیه", "دقیقه", "ساعت", "روز").forEach { u ->
-                        FilterChip(
-                            selected = intervalUnit == u,
-                            onClick = { intervalUnit = u },
-                            label = { Text(u, style = MaterialTheme.typography.labelSmall) },
-                        )
+                Box(modifier = Modifier.weight(1f)) {
+                    OutlinedTextField(
+                        value = intervalUnit,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("واحد") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                    )
+                    // Clickable overlay opens the unit dropdown.
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable { unitMenu = true },
+                    )
+                    DropdownMenu(expanded = unitMenu, onDismissRequest = { unitMenu = false }) {
+                        listOf("ثانیه", "دقیقه", "ساعت", "روز").forEach { u ->
+                            DropdownMenuItem(
+                                text = { Text(u) },
+                                onClick = { intervalUnit = u; unitMenu = false },
+                            )
+                        }
                     }
                 }
             }
+            Text(
+                "= ${describeSeconds(unitToSecondsPreview())}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             OutlinedTextField(
                 value = attemptsText,
@@ -194,17 +213,24 @@ fun KeepWorkingSettingsScreen(onBack: () -> Unit) {
                     OutlinedTextField(
                         value = newChatName,
                         onValueChange = { newChatName = it },
-                        label = { Text("اسم چت") },
+                        label = { Text("اسم چت (دقیقاً مثل عنوانش در لیست چت‌ها)") },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
                     )
-                    IconButton(onClick = {
+                    TextButton(onClick = {
                         val n = newChatName.trim()
                         if (n.isNotEmpty()) {
                             targetChats = targetChats + n
                             newChatName = ""
                         }
-                    }) { Icon(Icons.Filled.Add, contentDescription = "Add") }
+                    }) { Text("افزودن") }
+                }
+                if (targetChats.isEmpty()) {
+                    Text(
+                        "هنوز چتی اضافه نکرده‌ای. اسم چت‌ها باید دقیقاً با عنوانی که در لیست چت‌ها می‌بینی یکی باشد (بزرگی/کوچکی حروف مهم نیست).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
                 }
                 targetChats.sorted().forEach { name ->
                     Row(
@@ -212,21 +238,9 @@ fun KeepWorkingSettingsScreen(onBack: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        AssistChip(
-                            onClick = {},
-                            label = { Text(name) },
-                        )
-                        IconButton(onClick = { targetChats = targetChats - name }) {
-                            Icon(Icons.Filled.Close, contentDescription = "Remove")
-                        }
+                        Text("💬 $name", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { targetChats = targetChats - name }) { Text("حذف") }
                     }
-                }
-                if (targetChats.isEmpty()) {
-                    Text(
-                        "هنوز چتی اضافه نکرده‌ای — اسم چت‌ها باید دقیقاً با عنوانی که در لیست چت‌ها می‌بینی یکی باشد.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
                 }
             }
 
@@ -258,4 +272,22 @@ private fun decomposeInterval(seconds: Long): Pair<String, String> = when {
     seconds % 3600L == 0L && seconds >= 3600L -> (seconds / 3600L).toString() to "ساعت"
     seconds % 60L == 0L && seconds >= 60L -> (seconds / 60L).toString() to "دقیقه"
     else -> seconds.toString() to "ثانیه"
+}
+
+private fun intervalToSeconds(value: String, unit: String): Long {
+    val v = value.toLongOrNull() ?: return 30L
+    val factor = when (unit) {
+        "دقیقه" -> 60L
+        "ساعت" -> 3600L
+        "روز" -> 86_400L
+        else -> 1L
+    }
+    return (v * factor).coerceIn(5L, 31_536_000L)
+}
+
+private fun describeSeconds(seconds: Long): String = when {
+    seconds % 86_400L == 0L && seconds >= 86_400L -> "${seconds / 86_400L} روز"
+    seconds % 3600L == 0L && seconds >= 3600L -> "${seconds / 3600L} ساعت"
+    seconds % 60L == 0L && seconds >= 60L -> "${seconds / 60L} دقیقه"
+    else -> "$seconds ثانیه"
 }

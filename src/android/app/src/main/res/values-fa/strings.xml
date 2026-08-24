@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Persian (فارسی) — core UI strings. Keys not present here fall back to
+     English defaults automatically (Android resource fallback). -->
+<resources>
+    <string name="app_name">Minis Fork</string>
+    <string name="new_chat">چت جدید</string>
+    <string name="settings">تنظیمات</string>
+    <string name="providers">سرویس‌دهنده‌ها</string>
+    <string name="add_provider">افزودن سرویس‌دهنده</string>
+    <string name="appearance">ظاهر</string>
+    <string name="no_sessions">هنوز چتی وجود ندارد</string>
+    <string name="no_providers">سرویس‌دهنده‌ای وجود ندارد</string>
+    <string name="send">ارسال</string>
+    <string name="type_message">پیام را بنویسید…</string>
+    <string name="delete">حذف</string>
+    <string name="cancel">انصراف</string>
+    <string name="save">ذخیره</string>
+    <string name="api_key">کلید API</string>
+    <string name="label">برچسب</string>
+    <string name="enabled">فعال</string>
+    <string name="select_model">انتخاب مدل</string>
+
+    <!-- Settings sections -->
+    <string name="settings_title">تنظیمات</string>
+    <string name="settings_back">بازگشت</string>
+    <string name="settings_section_llm_providers">سرویس‌دهنده‌های هوش مصنوعی</string>
+    <string name="settings_manage_providers">مدیریت سرویس‌دهنده‌ها</string>
+    <string name="settings_manage_providers_subtitle">کلید API، آدرس پایه و مدل‌ها</string>
+    <string name="settings_model_groups">گروه‌های مدل</string>
+    <string name="settings_model_groups_subtitle">حلقه ایجنت، گروه‌ها و مدل‌ها</string>
+    <string name="settings_token_usage">مصرف توکن</string>
+    <string name="settings_token_usage_subtitle">آمار مصرف و زمینه</string>
+    <string name="settings_section_appearance">ظاهر</string>
+    <string name="settings_appearance_subtitle">تم، رنگ و آیکون</string>
+    <string name="settings_section_agent_runtime">زمان اجرای ایجنت</string>
+    <string name="settings_skills">مهارت‌ها</string>
+    <string name="settings_skills_subtitle">مهارت‌های قابل گسترش ایجنت</string>
+    <string name="settings_memory">حافظه</string>
+    <string name="settings_memory_subtitle">حافظه ماندگار بین گفتگوها</string>
+    <string name="settings_mcp">یکپارچه‌سازی MCP</string>
+    <string name="settings_mcp_subtitle">سرورهای ابزار MCP</string>
+    <string name="settings_soul">شخصیت (SOUL)</string>
+    <string name="settings_soul_subtitle">هویت و شخصیت دستیار</string>
+    <string name="settings_env_vars">متغیرهای محیطی</string>
+    <string name="settings_env_vars_subtitle">متغیرهای تزریق‌شده به سندباکس</string>
+    <string name="settings_section_storage">حافظه ذخیره‌سازی</string>
+    <string name="settings_storage_subtitle">ریشه لینوکس، سشن‌ها و پوشه‌ها</string>
+    <string name="settings_section_permissions">مجوزها</string>
+    <string name="settings_permissions_subtitle">حریم خصوصی، رسانه و سیستم</string>
+    <string name="settings_section_logs">لاگ‌ها</string>
+    <string name="settings_logs_subtitle">لاگ برنامه و کرش‌ها</string>
+    <string name="settings_section_about">درباره</string>
+    <string name="settings_about_subtitle">نسخه، لینک‌ها و بازخورد</string>
+    <string name="settings_shared_folders">پوشه‌های مشترک</string>
+    <string name="settings_shared_folders_subtitle">Shared / Skills / Memory</string>
+
+    <!-- Common -->
+    <string name="common_on">روشن</string>
+    <string name="common_off">خاموش</string>
+    <string name="common_yes">بله</string>
+    <string name="common_no">خیر</string>
+    <string name="common_close">بستن</string>
+    <string name="common_skip">رد کردن</string>
+    <string name="common_next">بعدی</string>
+    <string name="error_empty_response_generic">خطای ناشناخته رخ داد</string>
+
+    <!-- Memory -->
+    <string name="session_memory_title">حافظه</string>
+    <string name="memory_section_auto_injected">تزریق خودکار به پرامپت</string>
+    <string name="memory_section_tool_activity">فعالیت ابزار</string>
+    <string name="memory_section_written_content">محتوای نوشته‌شده</string>
+    <string name="memory_action_edit">ویرایش</string>
+    <string name="memory_action_save">ذخیره</string>
+    <string name="memory_action_back">بازگشت</string>
+    <string name="memory_save_toast">ذخیره شد</string>
+    <string name="memory_global_footer">فایل سراسری GLOBAL.md و لاگ‌های روزانه بین گفتگوها مشترک‌اند.</string>
+
+    <!-- Update checker -->
+    <string name="check_update_section_header">به‌روزرسانی</string>
+    <string name="check_update_current_version">نسخه فعلی</string>
+    <string name="check_update_check_button">بررسی به‌روزرسانی</string>
+    <string name="check_update_checking">در حال بررسی…</string>
+    <string name="check_update_up_to_date">به‌روز است</string>
+    <string name="check_update_download_button">دانلود</string>
+    <string name="check_update_downloading">در حال دانلود…</string>
+    <string name="check_update_download_failed">دانلود ناموفق بود</string>
+    <string name="check_update_error">خطا در بررسی به‌روزرسانی</string>
+
+    <!-- Permissions -->
+    <string name="permissions_title">مجوزها</string>
+    <string name="permissions_level_always_allow">همیشه اجازه بده</string>
+    <string name="permissions_level_ask_once">یک‌بار بپرس</string>
+    <string name="permissions_level_not_allowed">اجازه داده نشده</string>
+    <string name="permissions_category_privacy">حریم خصوصی</string>
+    <string name="permissions_category_media">رسانه</string>
+    <string name="permissions_category_system">سیستم</string>
+
+    <!-- Chat -->
+    <string name="resume_banner_title">پاسخ ناتمام مانده</string>
+    <string name="resume_action">ادامه</string>
+    <string name="search_chats_placeholder">جستجوی چت‌ها…</string>
+    <string name="search_no_results">نتیجه‌ای پیدا نشد</string>
+    <string name="stop_tool">توقف</string>
+    <string name="mention_scanning">در حال جستجو…</string>
+    <string name="mention_no_match">موردی پیدا نشد</string>
+
+    <!-- Skills -->
+    <string name="skills_search_placeholder">جستجوی مهارت‌ها…</string>
+    <string name="skills_search_no_match">مهارتی مطابق جستجو پیدا نشد</string>
+    <string name="session_skills_title">مهارت‌های این گفتگو</string>
+    <string name="session_skills_header_installed">نصب‌شده</string>
+    <string name="session_skills_enable_all">فعال کردن همه</string>
+    <string name="session_skills_disable_all">غیرفعال کردن همه</string>
+    <string name="session_skills_empty_title">مهارتی نصب نیست</string>
+
+    <!-- Background / battery -->
+    <string name="bg_section_header">پس‌زمینه و اعلان‌ها</string>
+    <string name="battery_opt_section_title">بهینه‌سازی باتری</string>
+    <string name="battery_opt_row_title">مستثنا کردن از بهینه‌سازی باتری</string>
+    <string name="rom_autostart_section_title">اجرای خودکار در شروع (OEM)</string>
+    <string name="bg_service_notification_title">ایجنت در حال کار است</string>
+
+    <!-- Time -->
+    <string name="time_just_now">همین حالا</string>
+    <string name="time_minutes_ago">دقیقه پیش</string>
+    <string name="time_hours_ago">ساعت پیش</string>
+    <string name="time_yesterday">دیروز</string>
+    <string name="time_today">امروز</string>
+
+    <!-- Token usage -->
+    <string name="token_usage_sheet_title">مصرف توکن</string>
+    <string name="token_usage_section_context">زمینه</string>
+    <string name="token_usage_context_used">مصرف‌شده</string>
+    <string name="token_usage_context_window">پنجره زمینه</string>
+    <string name="token_usage_max_output">حداکثر خروجی</string>
+    <string name="token_usage_output">خروجی</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_welcome_title">به Minis خوش آمدید</string>
+    <string name="onboarding_get_started">شروع کنیم</string>
+    <string name="onboarding_provider_api_key_label">کلید API</string>
+    <string name="onboarding_save_api_key">ذخیره کلید</string>
+    <string name="onboarding_saved">ذخیره شد</string>
+    <string name="onboarding_select_models_title">انتخاب مدل‌ها</string>
+    <string name="onboarding_search_models">جستجوی مدل‌ها…</string>
+
+    <!-- File browser -->
+    <string name="filebrowser_title">فایل‌ها</string>
+    <string name="filebrowser_empty_folder">پوشه خالی است</string>
+    <string name="filebrowser_sort_action">مرتب‌سازی</string>
+    <string name="filebrowser_sort_name">نام</string>
+    <string name="filebrowser_sort_modified">تاریخ تغییر</string>
+    <string name="filebrowser_sort_size">حجم</string>
+    <string name="filebrowser_sort_kind">نوع</string>
+    <string name="filebrowser_show_hidden">نمایش مخفی‌ها</string>
+    <string name="filebrowser_hide_hidden">پنهان کردن مخفی‌ها</string>
+    <string name="filebrowser_copy_abs_path">کپی مسیر کامل</string>
+
+    <!-- Web preview -->
+    <string name="webpreview_close">بستن</string>
+    <string name="webpreview_stop">توقف</string>
+    <string name="webpreview_reload">بارگذاری مجدد</string>
+    <string name="webpreview_share">اشتراک</string>
+    <string name="webpreview_open_external">باز کردن در مرورگر</string>
+    <string name="webpreview_desktop_site">نسخه دسکتاپ</string>
+    <string name="webpreview_mobile_site">نسخه موبایل</string>
+
+    <!-- Session list -->
+    <string name="sessionlist_section_pinned">سنجاق‌شده</string>
+    <string name="move_to_sheet_title">انتقال به…</string>
+    <string name="move_to_sheet_untitled">بدون عنوان</string>
+
+    <!-- Voice -->
+    <string name="mic_permission_title">مجوز میکروفون</string>
+    <string name="mic_permission_message">برای ورودی صوتی به میکروفون نیاز است.</string>
+    <string name="mic_permission_cancel">انصراف</string>
+    <string name="model_groups_voice_input">ورودی صوتی</string>
+    <string name="model_groups_voice_output">خروجی صوتی</string>
+    <string name="model_groups_vision">بینایی</string>
+</resources>

@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -89,7 +90,7 @@ fun AgentManagerScreen(onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(horizontal = 16.dp)) {
+        Column(modifier = Modifier.padding(padding).padding(horizontal = 16.dp).imePadding()) {
             Text(
                 "هر ابزار خط‌فرمانی (ایجنت) را با اسم و دستور دلخواه اضافه کن — نصب، به‌روزرسانی، حذف و اجرا. هیچ لیست ثابتی وجود ندارد؛ برای راهنمای هر ابزار از خود هوش مصنوعی در چت بپرس.",
                 style = MaterialTheme.typography.bodySmall,
