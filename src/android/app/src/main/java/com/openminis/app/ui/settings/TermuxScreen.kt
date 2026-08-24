@@ -70,6 +70,7 @@ fun TermuxScreen(onBack: () -> Unit) {
     var loaded by remember { mutableStateOf(false) }
     val history = remember { mutableStateListOf<String>() }
     var historyIdx by remember { mutableStateOf(-1) }
+    var lastCmd by remember { mutableStateOf("") }
     // Auto-open the keyboard when entering the terminal.
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     LaunchedEffect(loaded) { if (loaded) focusRequester.requestFocus() }
@@ -92,6 +93,7 @@ fun TermuxScreen(onBack: () -> Unit) {
             log("❌ اول کلید «فعال» را روشن کن.")
             return
         }
+        lastCmd = cmd
         log("\$ $cmd")
         testing = true
         scope.launch {
@@ -146,6 +148,22 @@ fun TermuxScreen(onBack: () -> Unit) {
                 color = if (installed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
             )
 
+            // ── Status bar: running state + last command + hide keyboard ─
+            val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    if (testing) "● در حال اجرا: $lastCmd" else "● آماده",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (testing) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                )
+                TextButton(onClick = { kb?.hide() }) { Text("بستن کیبورد") }
+            }
+
             // ── Mini terminal console ────────────────────────────────────
             Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 Column(
@@ -168,7 +186,7 @@ fun TermuxScreen(onBack: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                listOf("↑", "↓", "/", "~", "-", "|", ">", ">>", ".", "=", "\"", "'", "\$", "&&", "sudo ").forEach { k ->
+                listOf("↑", "↓", "TAB", "/", "~", "-", "|", ">", ">>", "<", "&", "*", ".", "_", "\"", "'", "\$", "&&", "sudo ").forEach { k ->
                     TextButton(onClick = {
                         when (k) {
                             "↑" -> {
@@ -183,7 +201,7 @@ fun TermuxScreen(onBack: () -> Unit) {
                                     command = history[historyIdx]
                                 }
                             }
-                            "sudo " -> command += k
+                            "TAB" -> command += "\t"
                             else -> command += k
                         }
                     }) { Text(k, style = MaterialTheme.typography.labelMedium) }
