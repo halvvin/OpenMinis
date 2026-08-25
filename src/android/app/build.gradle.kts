@@ -49,8 +49,11 @@ android {
             "\"${customizationValue("ANTHROPIC_OAUTH_IDENTIFIER_PROMPT")}\""
         )
 
+        // [T-emulator-abi] CI emulator smoke tests pass -PemulatorAbi=x86_64
+        // (GH runners are x86_64; the release APK stays arm64-v8a only).
+        val emulatorAbi = (project.findProperty("emulatorAbi") as String?)?.trim()
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += if (!emulatorAbi.isNullOrBlank()) listOf(emulatorAbi) else listOf("arm64-v8a")
         }
 
         externalNativeBuild {

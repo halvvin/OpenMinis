@@ -38,7 +38,7 @@ jobs:
 
       - name: Build debug APK
         working-directory: src/android
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+        run: ./gradlew assembleDebug -PemulatorAbi=x86_64 --stacktrace --no-daemon
 
       - name: Run emulator smoke tests
         uses: reactivecircus/android-emulator-runner@v2
