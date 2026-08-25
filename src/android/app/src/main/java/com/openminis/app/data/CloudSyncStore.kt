@@ -183,12 +183,12 @@ object CloudSyncStore {
                     )
                 }.isSuccess
                 "agents.json" -> runCatching {
-                    val f = File(context.filesDir, "automation/agents.json")
-                    f.parentFile?.mkdirs(); f.writeBytes(f.bytes)
+                    val file = File(context.filesDir, "automation/agents.json")
+                    file.parentFile?.mkdirs(); file.writeBytes(f.bytes)
                 }.isSuccess
                 "soul.md" -> runCatching {
-                    val f = File(context.filesDir, "minis-global/memory/SOUL.md")
-                    f.parentFile?.mkdirs(); f.writeBytes(f.bytes)
+                    val file = File(context.filesDir, "minis-global/memory/SOUL.md")
+                    file.parentFile?.mkdirs(); file.writeBytes(f.bytes)
                 }.isSuccess
                 "skills.zip" -> runCatching {
                     val skillsDir = File(context.filesDir, "minis-global/skills")
