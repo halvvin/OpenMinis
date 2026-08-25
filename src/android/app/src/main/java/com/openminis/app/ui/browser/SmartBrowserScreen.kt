@@ -262,11 +262,12 @@ fun BrowserScreen(onBack: () -> Unit) {
                     .background(MaterialTheme.colorScheme.background)
                     .imePadding(),
             ) {
-                // ── 1) Tab strip card ───────────────────────────────────
+                // ── 1) Tab strip card — HIGH CONTRAST (Chrome-style) ────
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
+                        .border(1.dp, Color(0xFFCBD0D8), RoundedCornerShape(12.dp)),
                     shape = RoundedCornerShape(12.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFDEE1E6)),
                 ) {
                     Row(
                         modifier = Modifier
@@ -286,19 +287,24 @@ fun BrowserScreen(onBack: () -> Unit) {
                                             onLongClick = { extMenuFor = t.id },
                                         )
                                         .background(
-                                            if (selected) MaterialTheme.colorScheme.secondaryContainer
-                                            else MaterialTheme.colorScheme.surfaceVariant,
-                                            RoundedCornerShape(8.dp),
+                                            if (selected) Color.White else Color(0xFFCBD0D8),
+                                            RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp),
+                                        )
+                                        .border(
+                                            if (selected) 2.dp else 1.dp,
+                                            if (selected) MaterialTheme.colorScheme.primary else Color(0xFF9AA0A6),
+                                            RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp),
                                         )
                                         .padding(horizontal = 10.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 ) {
                                     Text("🔒", style = MaterialTheme.typography.labelSmall)
-                                    Text(t.title.take(14), style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                                    Text(t.title.take(14), style = MaterialTheme.typography.labelMedium, maxLines = 1, color = Color(0xFF202124))
                                     Icon(
                                         Icons.Filled.Close,
                                         contentDescription = "بستن تب",
+                                        tint = Color(0xFF5F6368),
                                         modifier = Modifier.size(14.dp).clickable { closeTab(t.id) },
                                     )
                                 }
@@ -340,9 +346,10 @@ fun BrowserScreen(onBack: () -> Unit) {
                 // ── 2) Omnibox card ─────────────────────────────────────
                 var urlInput by remember(active.id) { mutableStateOf(active.url) }
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp)
+                        .border(1.dp, Color(0xFFCBD0D8), RoundedCornerShape(12.dp)),
                     shape = RoundedCornerShape(12.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
                 ) {
                     Column {
                         // ── Omnibox navigation (shared by Go button + Enter) ──
@@ -375,9 +382,15 @@ fun BrowserScreen(onBack: () -> Unit) {
                                 onValueChange = { urlInput = it },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
-                                placeholder = { Text("جستجو یا آدرس…", style = MaterialTheme.typography.bodySmall) },
-                                textStyle = MaterialTheme.typography.bodySmall,
+                                placeholder = { Text("جستجو یا آدرس…", style = MaterialTheme.typography.bodySmall, color = Color(0xFF5F6368)) },
+                                textStyle = MaterialTheme.typography.bodySmall.copy(color = Color(0xFF202124)),
                                 shape = RoundedCornerShape(20.dp),
+                                colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = Color(0xFF9AA0A6),
+                                    focusedContainerColor = Color(0xFFF1F3F4),
+                                    unfocusedContainerColor = Color(0xFFF1F3F4),
+                                ),
                                 // [T-omnibox-enter] Keyboard Enter now navigates —
                                 // the smoke test caught that Enter did nothing.
                                 keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
@@ -409,16 +422,17 @@ fun BrowserScreen(onBack: () -> Unit) {
 
                 // ── 3) Extensions bar card ──────────────────────────────
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
+                        .border(1.dp, Color(0xFFCBD0D8), RoundedCornerShape(12.dp)),
                     shape = RoundedCornerShape(12.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F3F4)),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 6.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        Text("انتخاب مدل:", style = MaterialTheme.typography.labelSmall)
+                        Text("انتخاب مدل:", style = MaterialTheme.typography.labelSmall, color = Color(0xFF202124))
                         Spacer(Modifier.width(2.dp))
                         Box {
                             var modelMenu by remember { mutableStateOf(false) }
@@ -455,8 +469,13 @@ fun BrowserScreen(onBack: () -> Unit) {
                                     .size(34.dp)
                                     .clickable { openExtension = if (isActive) null else ext.id }
                                     .background(
-                                        if (isActive) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-                                        CircleShape,
+                                        if (isActive) MaterialTheme.colorScheme.primary else Color.White,
+                                        RoundedCornerShape(8.dp),
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (isActive) MaterialTheme.colorScheme.primary else Color(0xFF9AA0A6),
+                                        RoundedCornerShape(8.dp),
                                     )
                                     .padding(6.dp),
                                 style = MaterialTheme.typography.titleMedium,
@@ -578,6 +597,59 @@ fun BrowserScreen(onBack: () -> Unit) {
                             }) { Text("تلاش دوباره") }
                         }
                     }
+                    // ── Start page for empty tabs (functional search) ────
+                    if (active.url.isBlank() && pageError == null) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().background(Color.White).padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text("🌐", style = MaterialTheme.typography.displayMedium)
+                            Spacer(Modifier.height(8.dp))
+                            Text("مرورگر هوشمند", style = MaterialTheme.typography.titleLarge, color = Color(0xFF202124))
+                            Spacer(Modifier.height(16.dp))
+                            var startQuery by remember { mutableStateOf("") }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                OutlinedTextField(
+                                    value = startQuery,
+                                    onValueChange = { startQuery = it },
+                                    modifier = Modifier.weight(1f),
+                                    singleLine = true,
+                                    placeholder = { Text("جستجو یا آدرس سایت…", color = Color(0xFF5F6368)) },
+                                    shape = RoundedCornerShape(24.dp),
+                                    colors = androidx.compose.material3.OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                        unfocusedBorderColor = Color(0xFF9AA0A6),
+                                    ),
+                                )
+                                IconButton(onClick = {
+                                    var u = startQuery.trim()
+                                    if (u.isNotEmpty()) {
+                                        if (!u.startsWith("http")) {
+                                            u = if (u.contains(".") && !u.contains(" ")) "https://$u"
+                                            else "https://duckduckgo.com/?q=" + java.net.URLEncoder.encode(u, "UTF-8")
+                                        }
+                                        updateTab(active.id) { it.copy(url = u) }
+                                        urlInput = u
+                                        webViewPool[active.id]?.loadUrl(u)
+                                    }
+                                }) {
+                                    Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "برو", tint = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                "افزونه‌ها را از نوار بالای صفحه باز کن: ترجمه، خلاصه، دانلود و…",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF5F6368),
+                            )
+                        }
+                    }
+
                     // ── 5) Floating AI panel (draggable, collapsible) ────
                     FloatingAiPanel(
                         open = aiPanelOpen,
