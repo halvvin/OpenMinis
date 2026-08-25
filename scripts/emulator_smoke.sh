@@ -31,13 +31,31 @@ adb shell uiautomator dump /sdcard/ui_browser.xml >/dev/null 2>&1 || true
 adb pull /sdcard/ui_browser.xml artifacts/ui_browser.xml >/dev/null 2>&1 || true
 
 echo "=== BROWSER: type URL + go ==="
-adb shell input tap 540 420
+# Find the omnibox dynamically from the UI dump (tap its real center).
+adb shell uiautomator dump /sdcard/ui_b.xml >/dev/null 2>&1 || true
+adb pull /sdcard/ui_b.xml ui_b.xml >/dev/null 2>&1 || true
+OMNIBOX_NODE=$(grep -o 'text="جستجو یا آدرس[^"]*" [^>]*bounds="\[[0-9]*,[0-9]*\]\[[0-9]*,[0-9]*\]"' ui_b.xml | head -1)
+if [ -n "$OMNIBOX_NODE" ]; then
+  X1=$(echo "$OMNIBOX_NODE" | grep -o 'bounds="\[[0-9]*,[0-9]*\]' | head -1 | grep -o '[0-9]*' | sed -n 1p)
+  Y1=$(echo "$OMNIBOX_NODE" | grep -o 'bounds="\[[0-9]*,[0-9]*\]' | head -1 | grep -o '[0-9]*' | sed -n 2p)
+  X2=$(echo "$OMNIBOX_NODE" | grep -o '\]\[[0-9]*,[0-9]*\]"' | grep -o '[0-9]*' | sed -n 1p)
+  Y2=$(echo "$OMNIBOX_NODE" | grep -o '\]\[[0-9]*,[0-9]*\]"' | grep -o '[0-9]*' | sed -n 2p)
+  TX=$(( (X1 + X2) / 2 ))
+  TY=$(( (Y1 + Y2) / 2 ))
+  echo "tapping omnibox at $TX,$TY"
+  adb shell input tap $TX $TY
+else
+  echo "omnibox not found in dump — fallback tap"
+  adb shell input tap 160 300
+fi
 sleep 2
 adb shell input text "example.com"
 sleep 1
 adb shell input keyevent 66
-sleep 12
+sleep 15
 adb exec-out screencap -p > artifacts/03-browser-loaded.png
+adb shell uiautomator dump /sdcard/ui_loaded.xml >/dev/null 2>&1 || true
+adb pull /sdcard/ui_loaded.xml artifacts/ui_loaded.xml >/dev/null 2>&1 || true
 
 echo "=== DEEP LINK: keep working settings ==="
 adb shell am start -a android.intent.action.VIEW -d "minis://settings/keep-working"
