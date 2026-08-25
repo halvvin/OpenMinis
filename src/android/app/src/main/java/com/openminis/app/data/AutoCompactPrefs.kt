@@ -41,7 +41,7 @@ object AutoCompactPrefs {
      */
     fun prime(context: Context) {
         appContext = context.applicationContext
-        cachedEnabled = prefs(context).getBoolean(KEY_ENABLED, false)
+        cachedEnabled = prefs(context).getBoolean(KEY_ENABLED, true)
     }
 
     /** Context-free read. False before [prime] runs, matching a fresh install. */

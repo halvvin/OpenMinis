@@ -68,12 +68,12 @@ object CrossChatTools {
     fun chatSendDefinition() = AgentToolDefinition(
         name = CHAT_SEND,
         description = "Append a message to ANOTHER chat session on the user's behalf. " +
-            "The message is attributed to this chat's title. Cannot target the current chat.",
+            "Recorded as a user message so the target chat's model never treats injected text as its own reply. Cannot target the current chat.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary of what this tool call does, shown to the user."),
             "session_title" to AgentToolParam("string", "Exact title of the target chat."),
             "text" to AgentToolParam("string", "The message text to append."),
-            "as_user" to AgentToolParam("string", "'true' to record it as a user message; default records it as an assistant note."),
+            "as_user" to AgentToolParam("string", "'false' to record it as an assistant note; default records it as a user message."),
         ),
         required = listOf("tool_title", "session_title", "text"),
         propertyOrdering = listOf("tool_title", "session_title", "text", "as_user"),
@@ -171,7 +171,10 @@ object CrossChatTools {
             val args = runCatching { JSONObject(argsJson) }.getOrDefault(JSONObject())
             val title = args.optString("session_title").trim()
             val text = args.optString("text")
-            val asUser = args.optString("as_user").equals("true", ignoreCase = true)
+            // [FIX-SAFETY] Default as_user=true: record injected text as a USER
+            // message so the target chat's model never mistakes it for its own
+            // reply (prompt-injection between chats).
+            val asUser = !args.optString("as_user").equals("false", ignoreCase = true)
             if (text.isBlank()) return@withContext ToolExecutionResult("Error: 'text' is required.", false)
             val target = findByTitle(repo, title)
                 ?: return@withContext ToolExecutionResult("Error: no chat titled \"$title\". Use chat_list first.", false)
@@ -202,7 +205,10 @@ object CrossChatTools {
         withContext(Dispatchers.IO) {
             val args = runCatching { JSONObject(argsJson) }.getOrDefault(JSONObject())
             val title = args.optString("session_title").trim()
-            val maxWait = args.optInt("max_wait_seconds", 120).coerceIn(10, 600)
+            // [FIX-SPEED] Cap the blocking window hard: 60s default, 120s max —
+            // a longer poll would hold the agent loop hostage past typical
+            // model-request timeouts and freeze the calling chat.
+            val maxWait = args.optInt("max_wait_seconds", 60).coerceIn(10, 120)
             val target = findByTitle(repo, title)
                 ?: return@withContext ToolExecutionResult("Error: no chat titled \"$title\". Use chat_list first.", false)
             if (target.id == sourceSessionId) {

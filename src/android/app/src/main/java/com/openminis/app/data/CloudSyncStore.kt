@@ -142,70 +142,75 @@ object CloudSyncStore {
     // [FIX-9] Dependency order: soul → profile → keep_working → agents → skills.
     private val PULL_ORDER = listOf("soul.md", "user_profile.json", "keep_working.json", "agents.json", "skills.zip")
 
+    // ── Pull: ordered by dependency (soul → profile → keep_working → agents → skills) ──
+    private val PULL_ORDER = listOf("soul.md", "user_profile.json", "keep_working.json", "agents.json", "skills.zip")
+
     fun pullAll(context: Context, cfg: Config): SyncResult {
         if (cfg.baseUrl.isBlank()) return SyncResult(false, "آدرس WebDAV تنظیم نشده")
         val results = mutableListOf<SyncResult>()
 
-        // [FIX-8] Probe the root first — a 5xx here means SERVER trouble, and
-        // the user must see that instead of a misleading "no files".
-        val (probeCode, _, probeMsg) = getWithCode(cfg, "")
-        if (probeCode >= 500) {
-            return SyncResult(false, "❌ خطای سرور ($probeMsg) — سرور WebDAV مشکل دارد، نه تنظیمات تو.")
+        // [FIX-8/9] Use getWithCode for a single fetch per path — no double
+        // download. Report 5xx errors per artifact so the user sees "server
+        // error on soul.md" instead of silent "no files".
+        data class Fetched(val path: String, val code: Int, val bytes: ByteArray, val msg: String)
+        val fetched = PULL_ORDER.map { p ->
+            val (code, bytes, msg) = getWithCode(cfg, p)
+            Fetched(p, code, bytes, msg)
         }
-
-        get(cfg, "user_profile.json").takeIf { it.first }?.let { (_, bytes) ->
-            runCatching { UserProfileStore.get(context).save(UserProfile.fromJson(String(bytes))) }
-                .onSuccess { results += SyncResult(true, "profile") }
-        }
-        get(cfg, "keep_working.json").takeIf { it.first }?.let { (_, bytes) ->
-            runCatching {
-                val o = JSONObject(String(bytes))
-                val cur = KeepWorkingPrefs.get(context).load()
-                KeepWorkingPrefs.get(context).save(
-                    cur.copy(
-                        enabled = o.optBoolean("enabled", cur.enabled),
-                        command = o.optString("command", cur.command),
-                        intervalSeconds = o.optLong("intervalSeconds", cur.intervalSeconds),
-                        maxAttempts = o.optInt("maxAttempts", cur.maxAttempts),
-                        chatFilterEnabled = o.optBoolean("chatFilterEnabled", cur.chatFilterEnabled),
-                        targetChats = o.optJSONArray("targetChats")?.let { a ->
-                            (0 until a.length()).map { a.optString(it) }.toSet()
-                        } ?: emptySet(),
+        var serverErrors = 0
+        for (f in fetched) {
+            if (f.code >= 500) {
+                results += SyncResult(false, "⚠️ خطای سرور در ${f.path}: ${f.msg}")
+                serverErrors++
+                continue
+            }
+            if (f.code !in 200..299) continue  // 404 = not found, skip
+            val ok = when (f.path) {
+                "user_profile.json" -> runCatching {
+                    UserProfileStore.get(context).save(UserProfile.fromJson(String(f.bytes)))
+                }.isSuccess
+                "keep_working.json" -> runCatching {
+                    val o = JSONObject(String(f.bytes))
+                    val cur = KeepWorkingPrefs.get(context).load()
+                    KeepWorkingPrefs.get(context).save(
+                        cur.copy(
+                            enabled = o.optBoolean("enabled", cur.enabled),
+                            command = o.optString("command", cur.command),
+                            intervalSeconds = o.optLong("intervalSeconds", cur.intervalSeconds),
+                            maxAttempts = o.optInt("maxAttempts", cur.maxAttempts),
+                            chatFilterEnabled = o.optBoolean("chatFilterEnabled", cur.chatFilterEnabled),
+                            targetChats = o.optJSONArray("targetChats")?.let { a ->
+                                (0 until a.length()).map { a.optString(it) }.toSet()
+                            } ?: emptySet(),
+                        )
                     )
-                )
-            }.onSuccess { results += SyncResult(true, "keep_working") }
-        }
-        get(cfg, "agents.json").takeIf { it.first }?.let { (_, bytes) ->
-            runCatching {
-                val f = File(context.filesDir, "automation/agents.json")
-                f.parentFile?.mkdirs(); f.writeBytes(bytes)
-            }.onSuccess { results += SyncResult(true, "agents") }
-        }
-        get(cfg, "soul.md").takeIf { it.first }?.let { (_, bytes) ->
-            runCatching {
-                val f = File(context.filesDir, "minis-global/memory/SOUL.md")
-                f.parentFile?.mkdirs(); f.writeBytes(bytes)
-            }.onSuccess { results += SyncResult(true, "soul") }
-        }
-        get(cfg, "skills.zip").takeIf { it.first }?.let { (_, bytes) ->
-            runCatching {
-                val skillsDir = File(context.filesDir, "minis-global/skills")
-                skillsDir.mkdirs()
-                unzipTo(bytes, skillsDir)
-            }.onSuccess { results += SyncResult(true, "skills") }
+                }.isSuccess
+                "agents.json" -> runCatching {
+                    val f = File(context.filesDir, "automation/agents.json")
+                    f.parentFile?.mkdirs(); f.writeBytes(f.bytes)
+                }.isSuccess
+                "soul.md" -> runCatching {
+                    val f = File(context.filesDir, "minis-global/memory/SOUL.md")
+                    f.parentFile?.mkdirs(); f.writeBytes(f.bytes)
+                }.isSuccess
+                "skills.zip" -> runCatching {
+                    val skillsDir = File(context.filesDir, "minis-global/skills")
+                    skillsDir.mkdirs()
+                    unzipTo(f.bytes, skillsDir)
+                }.isSuccess
+                else -> false
+            }
+            if (ok) results += SyncResult(true, f.path.removeSuffix(".json").removeSuffix(".md").removeSuffix(".zip"))
+            else results += SyncResult(false, "${f.path} → خطا در ذخیره")
         }
 
-        // [FIX-8] Report per-artifact server errors instead of silence.
-        val serverErrors = PULL_ORDER.mapNotNull { path ->
-            val (code, _, msg) = getWithCode(cfg, path)
-            if (code >= 500) "$path → $msg" else null
+        if (serverErrors > 0 && results.isEmpty()) {
+            return SyncResult(false, "❌ هیچ فایلی دریافت نشد — ${serverErrors} خطای سرور")
         }
-        serverErrors.forEach { results += SyncResult(false, it) }
-
         return if (results.isEmpty()) {
             SyncResult(false, "هیچ فایلی روی سرور پیدا نشد")
         } else {
-            SyncResult(true, "بازیابی شد: " + results.joinToString(", ") { it.message })
+            SyncResult(true, "بازیابی شد: " + results.joinToString(", ") { (if (it.ok) "✓ " else "✗ ") + it.message })
         }
     }
 

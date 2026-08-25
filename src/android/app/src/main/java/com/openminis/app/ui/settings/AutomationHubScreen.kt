@@ -97,7 +97,7 @@ fun AutomationHubScreen(
                 subtitle = "اجازه بده چت فعلی چت‌های دیگر را ببیند، پیام بفرستد و بسازد (پیش‌فرض خاموش)",
                 enabled = crossChat,
                 onToggle = { crossChat = it; prefs.crossChatEnabled = it; onCrossChatToggle(it) },
-                onClick = { onCrossChatToggle(!crossChat) },
+                onClick = { val nv = !crossChat; crossChat = nv; prefs.crossChatEnabled = nv; onCrossChatToggle(nv) },
             )
             AutomationItem(
                 title = "مدیریت ایجنت‌ها",

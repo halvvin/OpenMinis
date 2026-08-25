@@ -332,6 +332,8 @@ class ChatViewModel(
         private const val TOOL_INPUT_CHUNK_RING_MAX = 10
         /** Auto-retry backoff schedule (seconds). Mirrors iOS retryDelays, scaled to task spec: 1s → 2s → 4s. */
         private val AUTO_RETRY_DELAYS_SEC = intArrayOf(1, 2, 4)
+        /** [FIX-SPEED] Rate-limit backoff: longer because 429 is usually a per-minute quota; retry twice before giving up. */
+        private val RATE_LIMIT_DELAYS_SEC = intArrayOf(10, 30)
 
         /**
          * Factory for use with `viewModel(factory = ...)`. Binds the ChatViewModel
@@ -6920,6 +6922,7 @@ class ChatViewModel(
             // so we catch at collect level and unwrap.
             var collectDone = false
             var retryAttempt = 0  // per-turn auto-retry counter (resets on each new turn)
+            var rateLimitRetry = 0  // [FIX-SPEED] separate counter for 429 backoff
             while (!collectDone) {
                 try {
                     // [T-android-enhanced-cache] Stamp the per-turn Enhanced
@@ -7305,6 +7308,48 @@ class ChatViewModel(
                     val isTransient = actual is com.openminis.app.data.model.LLMError.NetworkError ||
                         actual is com.openminis.app.data.model.LLMError.TransientError ||
                         is5xx
+                    // [FIX-SPEED] 429 = per-minute quota: retry on the SAME
+                    // provider with a longer backoff BEFORE falling back (other
+                    // providers are often rate-limited too, and flapping burns
+                    // quota on both). Uses its own counter so transient retries
+                    // don't consume rate-limit retries and vice versa.
+                    var rateLimitRetryThis = rateLimitRetry
+                    if (isRateLimit && rateLimitRetryThis < RATE_LIMIT_DELAYS_SEC.size) {
+                        val delaySec = RATE_LIMIT_DELAYS_SEC[rateLimitRetryThis]
+                        rateLimitRetry = rateLimitRetryThis + 1
+                        val errDesc = actual.message ?: "Rate limited"
+                        Log.w(TAG, "🔁 Rate-limited on ${currentProvider.model.displayName}, retry in ${delaySec}s")
+                        withContext(Dispatchers.Main) {
+                            _autoRetryAttempt.value = rateLimitRetry
+                            setTransientInlineError("$errDesc — صبر و تلاش مجدد ($rateLimitRetry/${RATE_LIMIT_DELAYS_SEC.size})…")
+                        }
+                        try {
+                            for (remaining in delaySec downTo 1) {
+                                _autoRetryCountdown.value = remaining
+                                kotlinx.coroutines.delay(1000)
+                            }
+                        } finally {
+                            _autoRetryCountdown.value = 0
+                        }
+                        withContext(Dispatchers.Main) { clearInlineError() }
+                        if (allToolBlocks.size > turnStartBlockIndex) {
+                            while (allToolBlocks.size > turnStartBlockIndex) {
+                                allToolBlocks.removeAt(allToolBlocks.size - 1)
+                            }
+                        }
+                        turnTextSb.setLength(0)
+                        currentTextBlockSb = null
+                        turnTextBlockIdx = -1
+                        turnThinking.clear()
+                        toolCalls.clear()
+                        toolCallSignatures.clear()
+                        pendingChunkSb.setLength(0)
+                        lastUiUpdateMs = 0L
+                        lastFlushedLen = 0
+                        lastOtherToolInputMs = 0L
+                        lastFileToolInputMs = 0L
+                        continue  // retry the same provider after rate-limit backoff
+                    }
                     if (isTransient && retryAttempt < AUTO_RETRY_DELAYS_SEC.size) {
                         val delaySec = AUTO_RETRY_DELAYS_SEC[retryAttempt]
                         retryAttempt += 1
