@@ -22,6 +22,23 @@ adb exec-out screencap -p > artifacts/01-main.png
 adb shell uiautomator dump /sdcard/ui_main.xml >/dev/null 2>&1 || true
 adb pull /sdcard/ui_main.xml artifacts/ui_main.xml >/dev/null 2>&1 || true
 
+echo "=== SWITCH APP LANGUAGE TO PERSIAN (RTL reproduction) ==="
+cat > /tmp/fa_pref.xml <<'XML'
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <string name="app_language">fa</string>
+</map>
+XML
+adb push /tmp/fa_pref.xml /sdcard/fa_pref.xml >/dev/null
+adb shell force-stop "$PKG" 2>/dev/null || adb shell am force-stop "$PKG"
+adb shell run-as "$PKG" mkdir -p shared_prefs
+adb shell run-as "$PKG" sh -c 'cat /sdcard/fa_pref.xml > shared_prefs/appearance_prefs.xml'
+adb shell am start -n "$PKG/com.openminis.app.MainActivity"
+sleep 20
+adb exec-out screencap -p > artifacts/01b-main-fa.png
+adb shell uiautomator dump /sdcard/ui_main_fa.xml >/dev/null 2>&1 || true
+adb pull /sdcard/ui_main_fa.xml artifacts/ui_main_fa.xml >/dev/null 2>&1 || true
+
 echo "=== DEEP LINK: smart browser ==="
 adb shell am start -a android.intent.action.VIEW -d "minis://settings/smart-browser"
 sleep 15
@@ -29,6 +46,12 @@ adb shell "pidof $PKG" > artifacts/pid_browser.txt || true
 adb exec-out screencap -p > artifacts/02-browser.png
 adb shell uiautomator dump /sdcard/ui_browser.xml >/dev/null 2>&1 || true
 adb pull /sdcard/ui_browser.xml artifacts/ui_browser.xml >/dev/null 2>&1 || true
+# RTL/Persian regression check: omnibox MUST be present in the tree.
+if grep -q "جستجو یا آدرس" artifacts/ui_browser.xml 2>/dev/null; then
+  echo "PASS: omnibox rendered (fa/RTL)" > artifacts/browser_fa_check.txt
+else
+  echo "FAIL: omnibox MISSING in fa/RTL — blank-screen bug reproduced" > artifacts/browser_fa_check.txt
+fi
 
 echo "=== BROWSER: type URL + go ==="
 # Find the omnibox dynamically from the UI dump (tap its real center).
