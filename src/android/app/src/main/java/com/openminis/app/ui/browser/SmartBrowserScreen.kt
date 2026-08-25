@@ -164,9 +164,6 @@ fun BrowserScreen(onBack: () -> Unit) {
             val enabled = cfg.instances.filter { it.isEnabled }.map { it.id }.toSet()
             cfg.modelEntries.filter { it.providerInstanceId in enabled && !it.isHidden }
         }.getOrDefault(emptyList())
-        if (selectedEntryId.isEmpty() && modelEntries.value.isNotEmpty()) {
-            selectedEntryId = modelEntries.value.first().id
-        }
     }
     var selectedEntryId by remember { mutableStateOf(modelEntries.value.firstOrNull()?.id.orEmpty()) }
     // [T-models-autoselect] If models finished loading AFTER first composition
@@ -821,8 +818,8 @@ private fun BoxScope.FloatingAiPanel(
         val w = panelW.coerceAtLeast(52f)   // bubble is 52dp, panel is panelW
         offsetX = offsetX.coerceIn(-(screenW - w).toFloat().coerceAtLeast(0f), 0f)
         offsetY = offsetY.coerceIn(0f, (screenH - panelH - 80).toFloat().coerceAtLeast(0f))
-        panelW = panelW.coerceIn(220, screenW)
-        panelH = panelH.coerceIn(240, (screenH - 120).coerceAtLeast(240))
+        panelW = panelW.coerceIn(220f, screenW.toFloat())
+        panelH = panelH.coerceIn(240f, (screenH - 120).toFloat().coerceAtLeast(240f))
     }
     LaunchedEffect(Unit) { clamp() }
     var input by remember { mutableStateOf("") }

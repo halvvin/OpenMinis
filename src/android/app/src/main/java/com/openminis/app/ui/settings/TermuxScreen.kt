@@ -227,8 +227,8 @@ fun TermuxScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    ("0".."9").forEach { d ->
-                        TextButton(onClick = { command += d }) { Text(d, style = MaterialTheme.typography.labelMedium) }
+                    ('0'..'9').forEach { d ->
+                        TextButton(onClick = { command += d }) { Text(d.toString(), style = MaterialTheme.typography.labelMedium) }
                     }
                     TextButton(onClick = { command = "" }) { Text("پاک کردن", style = MaterialTheme.typography.labelMedium) }
                 }
