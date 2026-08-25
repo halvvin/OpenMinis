@@ -553,6 +553,7 @@ fun BrowserScreen(onBack: () -> Unit) {
                                 webViewPool[active.id]?.reload()
                             }) { Text("تلاش دوباره") }
                         }
+                    }
                     // ── 5) Floating AI panel (draggable, collapsible) ────
                     FloatingAiPanel(
                         open = aiPanelOpen,
