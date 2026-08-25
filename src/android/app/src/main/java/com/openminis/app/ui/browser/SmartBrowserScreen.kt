@@ -221,6 +221,9 @@ fun BrowserScreen(onBack: () -> Unit) {
     }
 
     val active = tabs.firstOrNull { it.id == activeId } ?: tabs.firstOrNull()
+    // Per-tab UI state for the CURRENT active tab — declared here (before the
+    // Omnibox card) so progress/error/back/fwd are in scope everywhere.
+    val tabUi = uiOf(active?.id.orEmpty())
 
     fun runExtension(ext: BrowserExtension, tab: BrowserTab, webViewRef: WebView?) {
         val entry = modelEntries.value.firstOrNull { it.id == selectedEntryId }
@@ -536,7 +539,6 @@ fun BrowserScreen(onBack: () -> Unit) {
                     // tab switch so the POOLED WebView of the new tab is actually
                     // displayed (factory-only binding showed tab #1 forever).
                     key(active.id) {
-                    val tabUi = uiOf(active.id)
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = { ctx ->
