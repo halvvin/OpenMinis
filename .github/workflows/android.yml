@@ -55,6 +55,20 @@ jobs:
             cp app/provider-customization.properties.example app/provider-customization.properties
           fi
 
+      # [T-stable-signature] Reuse ONE debug keystore across ALL CI builds.
+      # Without this, every build generates a fresh debug key and Android
+      # rejects upgrades with INSTALL_FAILED_UPDATE_INCOMPATIBLE
+      # ("App not installed" when installing over the previous version).
+      - name: Restore stable debug keystore
+        run: |
+          mkdir -p "$HOME/.android"
+          if [ -n "$ANDROID_DEBUG_KEYSTORE_B64" ]; then
+            echo "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > "$HOME/.android/debug.keystore"
+            chmod 600 "$HOME/.android/debug.keystore"
+          fi
+        env:
+          ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon
 
