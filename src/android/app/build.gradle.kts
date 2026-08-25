@@ -72,13 +72,36 @@ android {
     }
 
     buildTypes {
+        // [T-stable-signature] If a stable keystore exists at
+        // keystore/debug.keystore (decoded from the ANDROID_DEBUG_KEYSTORE_B64
+        // Actions secret by CI, or placed by a local dev), sign ALL builds
+        // with it so APK updates install in place. Otherwise fall back to the
+        // default per-machine debug keystore.
+        val stableKs = rootProject.file("keystore/debug.keystore")
+        if (stableKs.exists()) {
+            signingConfigs {
+                create("stable") {
+                    storeFile = stableKs
+                    storePassword = "android"
+                    keyAlias = "androiddebugkey"
+                    keyPassword = "android"
+                }
+            }
+        }
+        debug {
+            signingConfig = if (stableKs.exists())
+                signingConfigs.getByName("stable")
+            else signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (stableKs.exists())
+                signingConfigs.getByName("stable")
+            else signingConfigs.getByName("debug")
         }
     }
 

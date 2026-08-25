@@ -59,12 +59,17 @@ jobs:
       # Without this, every build generates a fresh debug key and Android
       # rejects upgrades with INSTALL_FAILED_UPDATE_INCOMPATIBLE
       # ("App not installed" when installing over the previous version).
+      # The keystore is decoded into src/android/keystore/ and build.gradle.kts
+      # explicitly signs with it (env-based default paths proved unreliable).
       - name: Restore stable debug keystore
         run: |
-          mkdir -p "$HOME/.android"
           if [ -n "$ANDROID_DEBUG_KEYSTORE_B64" ]; then
-            echo "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > "$HOME/.android/debug.keystore"
-            chmod 600 "$HOME/.android/debug.keystore"
+            mkdir -p keystore
+            echo "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > keystore/debug.keystore
+            chmod 600 keystore/debug.keystore
+            echo "keystore restored: $(wc -c < keystore/debug.keystore) bytes"
+          else
+            echo "WARNING: ANDROID_DEBUG_KEYSTORE_B64 secret missing — build will use a fresh debug key"
           fi
         env:
           ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
