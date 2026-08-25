@@ -108,6 +108,18 @@ class BrowserTabStore private constructor(context: Context) {
 
     fun newId(): String = "tab_" + java.util.UUID.randomUUID().toString().take(8)
 
+    // ── [FIX-3] Async variants — disk I/O off the main thread. A SINGLE-
+    // threaded executor keeps write ordering (no interleaved read-modify-
+    // write races between rapid navigations). ─────────────────────────────
+    private val writeExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+
+    fun upsertAsync(tab: BrowserTab) = writeExecutor.execute { runCatching { upsert(tab) } }
+
+    fun removeAsync(id: String) = writeExecutor.execute { runCatching { remove(id) } }
+
+    fun appendMessageAsync(tabId: String, msg: BrowserChatMsg) =
+        writeExecutor.execute { runCatching { appendMessage(tabId, msg) } }
+
     companion object {
         @Volatile private var instance: BrowserTabStore? = null
 

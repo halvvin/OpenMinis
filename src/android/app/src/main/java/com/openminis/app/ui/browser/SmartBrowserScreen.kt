@@ -60,6 +60,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -96,6 +97,14 @@ private const val MAX_ACTIVE_TABS = 8
 
 /** One captured network request (Reverse API extension). */
 data class HarEntry(val method: String, val url: String, val at: Long)
+
+/** [FIX-7] Per-tab UI state. Compose states so reads subscribe in composition. */
+data class TabUi(
+    val progress: androidx.compose.runtime.MutableState<Int> = androidx.compose.runtime.mutableStateOf(0),
+    val error: androidx.compose.runtime.MutableState<String?> = androidx.compose.runtime.mutableStateOf(null),
+    val back: androidx.compose.runtime.MutableState<Boolean> = androidx.compose.runtime.mutableStateOf(false),
+    val fwd: androidx.compose.runtime.MutableState<Boolean> = androidx.compose.runtime.mutableStateOf(false),
+)
 
 /** Extension definitions — small panels, never full screens. */
 private data class BrowserExtension(
@@ -135,10 +144,10 @@ fun BrowserScreen(onBack: () -> Unit) {
     // Per-tab in-memory state
     val webViewPool = remember { LinkedHashMap<String, WebView>() }
     val harLog = remember { mutableMapOf<String, MutableList<HarEntry>>() }
-    var progress by remember { mutableStateOf(0) }
-    var pageError by remember { mutableStateOf<String?>(null) }
-    var canGoBack by remember { mutableStateOf(false) }
-    var canGoForward by remember { mutableStateOf(false) }
+    // [FIX-7] Per-tab UI state — progress/error/back/forward are PER TAB,
+    // never global (switching tabs no longer shows another tab's state).
+    val tabUiStates = remember { mutableMapOf<String, TabUi>() }
+    fun uiOf(id: String): TabUi = tabUiStates.getOrPut(id) { TabUi() }
 
     // Model pool (reactive — repo loads async)
     val modelEntries = remember { mutableStateOf<List<com.openminis.app.data.model.ModelEntry>>(emptyList()) }
@@ -157,16 +166,27 @@ fun BrowserScreen(onBack: () -> Unit) {
     LaunchedEffect(Unit) {
         if (tabs.isEmpty()) {
             val t = BrowserTab(id = store.newId())
-            store.upsert(t)
+            store.upsertAsync(t)
             tabs.add(t)
         }
         if (activeId.isEmpty() || tabs.none { it.id == activeId }) activeId = tabs.first().id
     }
 
+    // [FIX-5] Destroy every pooled WebView when the screen leaves composition
+    // (no leaked WebViews, no stale re-attach on re-entry).
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        onDispose {
+            webViewPool.values.forEach { it.destroy() }
+            webViewPool.clear()
+        }
+    }
+
+    // [FIX-3] Disk writes happen OFF the main thread (single-thread executor
+    // inside the store keeps write ordering); state updates stay immediate.
     fun updateTab(tabId: String, transform: (BrowserTab) -> BrowserTab) {
         store.get(tabId)?.let { cur ->
             val next = transform(cur)
-            store.upsert(next)
+            store.upsertAsync(next)
             val i = tabs.indexOfFirst { it.id == tabId }
             if (i >= 0) tabs[i] = next
         }
@@ -174,17 +194,18 @@ fun BrowserScreen(onBack: () -> Unit) {
 
     fun newTab() {
         val t = BrowserTab(id = store.newId())
-        store.upsert(t)
+        store.upsertAsync(t)
         tabs.add(t)
         activeId = t.id
-        pageError = null
-        progress = 0
+        uiOf(t.id).error.value = null
+        uiOf(t.id).progress.value = 0
     }
 
     fun closeTab(id: String) {
-        store.remove(id)
+        store.removeAsync(id)
         webViewPool.remove(id)?.destroy()
         harLog.remove(id)
+        tabUiStates.remove(id)
         val i = tabs.indexOfFirst { it.id == id }
         if (i >= 0) tabs.removeAt(i)
         if (activeId == id) activeId = tabs.firstOrNull()?.id.orEmpty()
@@ -283,7 +304,7 @@ fun BrowserScreen(onBack: () -> Unit) {
                                 Row(
                                     modifier = Modifier
                                         .combinedClickable(
-                                            onClick = { activeId = t.id; pageError = null },
+                                            onClick = { activeId = t.id; uiOf(t.id).error.value = null },
                                             onLongClick = { extMenuFor = t.id },
                                         )
                                         .background(
@@ -371,11 +392,11 @@ fun BrowserScreen(onBack: () -> Unit) {
                         ) {
                             IconButton(
                                 onClick = { webViewPool[active.id]?.goBack() },
-                                enabled = canGoBack,
+                                enabled = tabUi.back.value,
                             ) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "عقب") }
                             IconButton(
                                 onClick = { webViewPool[active.id]?.goForward() },
-                                enabled = canGoForward,
+                                enabled = tabUi.fwd.value,
                             ) { Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = "جلو") }
                             OutlinedTextField(
                                 value = urlInput,
@@ -411,9 +432,9 @@ fun BrowserScreen(onBack: () -> Unit) {
                                 updateTab(active.id) { cur -> if (cur.title.startsWith("★")) cur else cur.copy(title = "★" + cur.title) }
                             }) { Icon(Icons.Filled.Star, contentDescription = "نشان‌گذاری") }
                         }
-                        if (progress in 1..99) {
+                        if (tabUi.progress.value in 1..99) {
                             LinearProgressIndicator(
-                                progress = { progress / 100f },
+                                progress = { tabUi.progress.value / 100f },
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
                             )
                         }
@@ -510,14 +531,20 @@ fun BrowserScreen(onBack: () -> Unit) {
 
                 // ── 4) Web content ──────────────────────────────────────
                 Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    // [T-webview-always] The WebView is composed UNCONDITIONALLY —
-                    // v4 skipped it for empty-URL tabs, so webViewRef was null and
-                    // the Go button did literally nothing on a new tab.
+                    // [T-webview-always] Composed unconditionally. [FIX-1]
+                    // key(active.id) forces the AndroidView node to be rebuilt on
+                    // tab switch so the POOLED WebView of the new tab is actually
+                    // displayed (factory-only binding showed tab #1 forever).
+                    key(active.id) {
+                    val tabUi = uiOf(active.id)
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = { ctx ->
                             enforceTabBudget(active.id)
-                            webViewPool.getOrPut(active.id) {
+                            val tabId = active.id
+                            val tabUrl = active.url
+                            val ui = uiOf(tabId) // [FIX-4] per-tab closure — never stale
+                            webViewPool.getOrPut(tabId) {
                                 WebView(ctx).apply {
                                     settings.javaScriptEnabled = true
                                     settings.domStorageEnabled = true
@@ -526,14 +553,24 @@ fun BrowserScreen(onBack: () -> Unit) {
                                 }
                             }.apply {
                                 webViewClient = object : WebViewClient() {
+                                    // [FIX-2] Clear the error overlay the moment a new
+                                    // navigation starts — one bad page never blocks again.
+                                    override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                                        ui.error.value = null
+                                        ui.progress.value = 5
+                                    }
+
+                                    override fun onPageFinished(view: WebView?, url: String?) {
+                                        ui.progress.value = 100
+                                    }
+
                                     override fun shouldInterceptRequest(
                                         view: WebView?,
                                         request: WebResourceRequest?,
                                     ): WebResourceResponse? {
-                                        // [T-har-capture] Record main-frame + XHR
-                                        // traffic for the Reverse API extension.
+                                        // [T-har-capture] Record main-frame + XHR traffic.
                                         request?.let { req ->
-                                            val list = harLog.getOrPut(active.id) { mutableListOf() }
+                                            val list = harLog.getOrPut(tabId) { mutableListOf() }
                                             if (list.size < 500) {
                                                 list.add(HarEntry(req.method ?: "GET", req.url.toString(), System.currentTimeMillis()))
                                             }
@@ -544,10 +581,10 @@ fun BrowserScreen(onBack: () -> Unit) {
                                     override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
                                         url?.let {
                                             urlInput = it
-                                            updateTab(active.id) { cur -> cur.copy(url = it, title = view?.title ?: cur.title) }
+                                            updateTab(tabId) { cur -> cur.copy(url = it, title = view?.title ?: cur.title) }
                                         }
-                                        canGoBack = view?.canGoBack() ?: false
-                                        canGoForward = view?.canGoForward() ?: false
+                                        ui.back.value = view?.canGoBack() ?: false
+                                        ui.fwd.value = view?.canGoForward() ?: false
                                     }
 
                                     override fun onReceivedError(
@@ -556,28 +593,35 @@ fun BrowserScreen(onBack: () -> Unit) {
                                         err: android.webkit.WebResourceError?,
                                     ) {
                                         if (req?.isForMainFrame == true) {
-                                            pageError = err?.description?.toString() ?: "خطای شبکه"
+                                            ui.error.value = err?.description?.toString() ?: "خطای شبکه"
                                         }
                                     }
                                 }
                                 webChromeClient = object : WebChromeClient() {
                                     override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                                        progress = newProgress
+                                        ui.progress.value = newProgress
                                     }
                                 }
-                                // [T-blank-page-fix] A pooled/recreated WebView's
-                                // getUrl() is "about:blank" — NOT blank — so the
-                                // old isNullOrBlank() check never fired.
+                                // [T-blank-page-fix] about:blank comparison.
                                 val cur = url
-                                if ((cur.isNullOrBlank() || cur == "about:blank") && active.url.isNotBlank()) {
-                                    loadUrl(active.url)
+                                if ((cur.isNullOrBlank() || cur == "about:blank") && tabUrl.isNotBlank()) {
+                                    loadUrl(tabUrl)
                                 }
                             }
                         },
-                        onRelease = { /* pooled */ },
+                        // [FIX-1b] update block: re-bind + load if this pooled view
+                        // is still blank while the tab has a URL (e.g. restored tab).
+                        update = { wv ->
+                            val cur = wv.url
+                            if ((cur.isNullOrBlank() || cur == "about:blank") && active.url.isNotBlank()) {
+                                wv.loadUrl(active.url)
+                            }
+                        },
+                        onRelease = { /* pooled — destroyed on screen exit */ },
                     )
+                    }
 
-                    if (pageError != null) {
+                    if (tabUi.error.value != null) {
                         // Friendly error page with retry (overlay, non-blocking).
                         Column(
                             modifier = Modifier.fillMaxSize().padding(32.dp),
@@ -587,18 +631,18 @@ fun BrowserScreen(onBack: () -> Unit) {
                             Text("📡", style = MaterialTheme.typography.displayMedium)
                             Text("صفحه باز نشد", style = MaterialTheme.typography.titleMedium)
                             Text(
-                                pageError ?: "",
+                                tabUi.error.value ?: "",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                             TextButton(onClick = {
-                                pageError = null
+                                tabUi.error.value = null
                                 webViewPool[active.id]?.reload()
                             }) { Text("تلاش دوباره") }
                         }
                     }
                     // ── Start page for empty tabs (functional search) ────
-                    if (active.url.isBlank() && pageError == null) {
+                    if (active.url.isBlank() && tabUi.error.value == null) {
                         Column(
                             modifier = Modifier.fillMaxSize().background(Color.White).padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -743,6 +787,16 @@ private fun BoxScope.FloatingAiPanel(
     var offsetY by remember { mutableStateOf(autoPrefs.floatPanelY) }
     var panelW by remember { mutableStateOf(autoPrefs.floatPanelW) }
     var panelH by remember { mutableStateOf(autoPrefs.floatPanelH) }
+    // [FIX-6] Clamp to screen so the panel can never be dragged out of reach.
+    val screenW = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
+    fun clamp() {
+        offsetX = offsetX.coerceIn(0f, (screenW - 60).toFloat().coerceAtLeast(0f))
+        offsetY = offsetY.coerceIn(0f, (screenH - 80).toFloat().coerceAtLeast(0f))
+        panelW = panelW.coerceIn(220, screenW)
+        panelH = panelH.coerceIn(240, screenH)
+    }
+    LaunchedEffect(Unit) { clamp() }
     var input by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
 
@@ -774,6 +828,7 @@ private fun BoxScope.FloatingAiPanel(
                             change.consume()
                             offsetX += drag.x
                             offsetY += drag.y
+                            clamp()
                         }
                     },
                 contentAlignment = Alignment.Center,
@@ -805,6 +860,7 @@ private fun BoxScope.FloatingAiPanel(
                             change.consume()
                             offsetX += drag.x
                             offsetY += drag.y
+                            clamp()
                         }
                     }
                     .padding(horizontal = 8.dp, vertical = 4.dp),
@@ -958,6 +1014,19 @@ private fun ReverseApiPanel(
             TextButton(onClick = {
                 scope.launch {
                     busy = true; status = "در حال نصب (چند دقیقه)…"
+                    // [FIX-8] Preflight: sandbox must have Python before pip runs.
+                    val pre = runCatching {
+                        com.openminis.app.sandbox.ExecutionCoordinator.execute(
+                            "reverse-api-preflight",
+                            "command -v python3 >/dev/null && echo __PY_OK__ || echo __PY_MISSING__",
+                            timeout = 30_000L,
+                        )
+                    }.getOrNull()
+                    if (pre == null || pre.output.contains("__PY_MISSING__")) {
+                        status = "❌ سندباکس پایتون ندارد. یک بار در چت اصلی بگو: «apk add python3 py3-pip» یا از گزینه Termux استفاده کن."
+                        busy = false
+                        return@launch
+                    }
                     val s = runCatching { ReverseApi.install() }.getOrDefault(ReverseApi.Status(false, "خطا"))
                     status = if (s.installed) "✅ نصب شد" else "❌ ${s.detail.take(120)}"
                     busy = false
