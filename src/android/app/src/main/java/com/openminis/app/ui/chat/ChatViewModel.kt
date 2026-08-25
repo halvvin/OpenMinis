@@ -850,9 +850,9 @@ class ChatViewModel(
             alwaysOnEnabled = runCatching {
                 com.openminis.app.automation.AutomationPrefs.get(context).alwaysOnEnabled
             }.getOrDefault(false),
-            crossChatEnabled = runCatching {
-                com.openminis.app.automation.AutomationPrefs.get(context).crossChatEnabled
-            }.getOrDefault(false),
+            crossChatMode = runCatching {
+                com.openminis.app.automation.AutomationPrefs.get(context).crossChatMode
+            }.getOrDefault(0),
         )
 
     /**
@@ -8261,7 +8261,9 @@ class ChatViewModel(
                     _sessionTitle.value.orEmpty().ifBlank { "چت بدون عنوان" }, context,
                 )
             com.openminis.app.tools.CrossChatTools.CHAT_CREATE ->
-                com.openminis.app.tools.CrossChatTools.executeChatCreate(argsJson, chatRepository, context)
+                com.openminis.app.tools.CrossChatTools.executeChatCreate(
+                    argsJson, chatRepository, currentModel?.id.orEmpty(), context,
+                )
             com.openminis.app.tools.CrossChatTools.CHAT_WATCH ->
                 com.openminis.app.tools.CrossChatTools.executeChatWatch(argsJson, chatRepository, realSessionId.ifEmpty { sessionId }, context)
             else -> ToolExecutionResult("Unknown tool: $name", false)
@@ -9343,15 +9345,22 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             }
         } catch (_: Exception) { null }
         // [T-cross-chat] Capability announcement — only when the user enabled it.
+        val crossChatMode = runCatching {
+            com.openminis.app.automation.AutomationPrefs.get(context).crossChatMode
+        }.getOrDefault(0)
         val crossChatFragment = try {
-            if (com.openminis.app.automation.AutomationPrefs.get(context).crossChatEnabled) {
+            if (crossChatMode != 0) {
+                val scopeLine = if (crossChatMode == 1)
+                    "SCOPE: READ-ONLY — you can list/read/watch other chats, but chat_send is NOT available."
+                else
+                    "SCOPE: FULL — you can list, read, send to, create, and watch other chats."
                 """
-Cross-chat capabilities are ENABLED for this session. You can:
+Cross-chat capabilities are ENABLED for this session. $scopeLine
+You can:
 - list other chats (chat_list)
 - read another chat's history (chat_read)
-- send a message to another chat (chat_send) — the receiving chat will see it attributed to this chat's title
-- create a brand new chat (chat_create)
 - watch another chat for new messages (chat_watch)
+${if (crossChatMode == 2) "- send a message to another chat (chat_send) — the receiving chat will see it attributed to this chat's title\n- create a brand new chat (chat_create)" else ""}
 Only invoke these tools when the user explicitly asks you to interact with another chat. Never use chat_send to spam or bypass the user's instruction. Never target the current chat (self-loop guard). Always report back to the user what you did: which chat you contacted, and what happened.
 """
             } else null

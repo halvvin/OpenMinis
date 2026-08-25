@@ -156,49 +156,59 @@ object CloudSyncStore {
         }
         var serverErrors = 0
         for (f in fetched) {
-            if (f.code >= 500) {
-                results += SyncResult(false, "⚠️ خطای سرور در ${f.path}: ${f.msg}")
-                serverErrors++
-                continue
+            when {
+                f.code in 200..299 -> {
+                    // [FIX-NEW-4] Process file (same logic as before — no change).
+                    val ok = when (f.path) {
+                        "user_profile.json" -> runCatching {
+                            UserProfileStore.get(context).save(UserProfile.fromJson(String(f.bytes)))
+                        }.isSuccess
+                        "keep_working.json" -> runCatching {
+                            val o = JSONObject(String(f.bytes))
+                            val cur = KeepWorkingPrefs.get(context).load()
+                            KeepWorkingPrefs.get(context).save(
+                                cur.copy(
+                                    enabled = o.optBoolean("enabled", cur.enabled),
+                                    command = o.optString("command", cur.command),
+                                    intervalSeconds = o.optLong("intervalSeconds", cur.intervalSeconds),
+                                    maxAttempts = o.optInt("maxAttempts", cur.maxAttempts),
+                                    chatFilterEnabled = o.optBoolean("chatFilterEnabled", cur.chatFilterEnabled),
+                                    targetChats = o.optJSONArray("targetChats")?.let { a ->
+                                        (0 until a.length()).map { a.optString(it) }.toSet()
+                                    } ?: emptySet(),
+                                )
+                            )
+                        }.isSuccess
+                        "agents.json" -> runCatching {
+                            val file = File(context.filesDir, "automation/agents.json")
+                            file.parentFile?.mkdirs(); file.writeBytes(f.bytes)
+                        }.isSuccess
+                        "soul.md" -> runCatching {
+                            val file = File(context.filesDir, "minis-global/memory/SOUL.md")
+                            file.parentFile?.mkdirs(); file.writeBytes(f.bytes)
+                        }.isSuccess
+                        "skills.zip" -> runCatching {
+                            val skillsDir = File(context.filesDir, "minis-global/skills")
+                            skillsDir.mkdirs()
+                            unzipTo(f.bytes, skillsDir)
+                        }.isSuccess
+                        else -> false
+                    }
+                    if (ok) results += SyncResult(true, f.path.removeSuffix(".json").removeSuffix(".md").removeSuffix(".zip"))
+                    else results += SyncResult(false, "${f.path} → خطا در ذخیره")
+                }
+                f.code == 404 -> continue  // file genuinely absent on server
+                f.code in 400..499 -> {
+                    results += SyncResult(false, "🔐 خطای ${f.code} در ${f.path}: رمز یا آدرس WebDAV را بررسی کنید.")
+                }
+                f.code in 500..599 -> {
+                    results += SyncResult(false, "⚠️ خطای سرور در ${f.path}: ${f.msg}")
+                    serverErrors++
+                }
+                else -> {
+                    results += SyncResult(false, "❓ پاسخ غیرمنتظره برای ${f.path}: HTTP ${f.code}")
+                }
             }
-            if (f.code !in 200..299) continue  // 404 = not found, skip
-            val ok = when (f.path) {
-                "user_profile.json" -> runCatching {
-                    UserProfileStore.get(context).save(UserProfile.fromJson(String(f.bytes)))
-                }.isSuccess
-                "keep_working.json" -> runCatching {
-                    val o = JSONObject(String(f.bytes))
-                    val cur = KeepWorkingPrefs.get(context).load()
-                    KeepWorkingPrefs.get(context).save(
-                        cur.copy(
-                            enabled = o.optBoolean("enabled", cur.enabled),
-                            command = o.optString("command", cur.command),
-                            intervalSeconds = o.optLong("intervalSeconds", cur.intervalSeconds),
-                            maxAttempts = o.optInt("maxAttempts", cur.maxAttempts),
-                            chatFilterEnabled = o.optBoolean("chatFilterEnabled", cur.chatFilterEnabled),
-                            targetChats = o.optJSONArray("targetChats")?.let { a ->
-                                (0 until a.length()).map { a.optString(it) }.toSet()
-                            } ?: emptySet(),
-                        )
-                    )
-                }.isSuccess
-                "agents.json" -> runCatching {
-                    val file = File(context.filesDir, "automation/agents.json")
-                    file.parentFile?.mkdirs(); file.writeBytes(f.bytes)
-                }.isSuccess
-                "soul.md" -> runCatching {
-                    val file = File(context.filesDir, "minis-global/memory/SOUL.md")
-                    file.parentFile?.mkdirs(); file.writeBytes(f.bytes)
-                }.isSuccess
-                "skills.zip" -> runCatching {
-                    val skillsDir = File(context.filesDir, "minis-global/skills")
-                    skillsDir.mkdirs()
-                    unzipTo(f.bytes, skillsDir)
-                }.isSuccess
-                else -> false
-            }
-            if (ok) results += SyncResult(true, f.path.removeSuffix(".json").removeSuffix(".md").removeSuffix(".zip"))
-            else results += SyncResult(false, "${f.path} → خطا در ذخیره")
         }
 
         if (serverErrors > 0 && results.isEmpty()) {

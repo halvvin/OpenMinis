@@ -51,12 +51,18 @@ fun AutomationHubScreen(
     val prefs = remember { AutomationPrefs.get(context) }
     var alwaysOn by remember { mutableStateOf(false) }
     var termux by remember { mutableStateOf(false) }
-    var crossChat by remember { mutableStateOf(false) }
+    var crossChatMode by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         alwaysOn = prefs.alwaysOnEnabled
         termux = prefs.termuxEnabled
-        crossChat = prefs.crossChatEnabled
+        crossChatMode = prefs.crossChatMode
+    }
+
+    fun setCrossChatMode(mode: Int) {
+        crossChatMode = mode
+        prefs.crossChatMode = mode
+        onCrossChatToggle(mode != 0)
     }
 
     Scaffold(
@@ -92,13 +98,34 @@ fun AutomationHubScreen(
                 onToggle = { termux = it; prefs.termuxEnabled = it },
                 onClick = onTermuxClick,
             )
+            // [FIX-NEW-5] Cross-chat: 3-state selector (خاموش / فقط خواندن / خواندن+نوشتن)
             AutomationItem(
                 title = "ارتباط بین چت‌ها",
-                subtitle = "اجازه بده چت فعلی چت‌های دیگر را ببیند، پیام بفرستد و بسازد (پیش‌فرض خاموش)",
-                enabled = crossChat,
-                onToggle = { crossChat = it; prefs.crossChatEnabled = it; onCrossChatToggle(it) },
-                onClick = { val nv = !crossChat; crossChat = nv; prefs.crossChatEnabled = nv; onCrossChatToggle(nv) },
+                subtitle = when (crossChatMode) {
+                    1 -> "فقط خواندن: دیدن، خواندن و دنبال‌کردن چت‌های دیگر (بدون ارسال پیام)"
+                    2 -> "خواندن + نوشتن: دیدن، خواندن، ارسال، ساخت و دنبال‌کردن چت‌های دیگر"
+                    else -> "اجازه بده چت فعلی چت‌های دیگر را ببیند، بخواند و به آن‌ها پیام بفرستد (پیش‌فرض خاموش)"
+                },
+                enabled = crossChatMode != 0,
+                onToggle = { on -> setCrossChatMode(if (on) 2 else 0) },
+                onClick = { setCrossChatMode(if (crossChatMode == 0) 2 else 0) },
             )
+            if (crossChatMode != 0) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    listOf(0 to "خاموش", 1 to "فقط خواندن", 2 to "خواندن + نوشتن").forEach { (mode, label) ->
+                        TextButton(
+                            onClick = { setCrossChatMode(mode) },
+                            colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                                containerColor = if (crossChatMode == mode) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                            ),
+                        ) { Text(label, style = MaterialTheme.typography.labelMedium) }
+                    }
+                }
+            }
             AutomationItem(
                 title = "مدیریت ایجنت‌ها",
                 subtitle = "نصب، به‌روزرسانی، حذف و اجرای هر ابزار خط‌فرمانی — کاملاً پویا و بدون لیست ثابت",

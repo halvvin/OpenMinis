@@ -187,13 +187,27 @@ object CrossChatTools {
             ToolExecutionResult("Delivered to chat \"$title\" ✓", true)
         }
 
-    suspend fun executeChatCreate(argsJson: String, repo: ChatRepository, context: Context): ToolExecutionResult =
+    suspend fun executeChatCreate(argsJson: String, repo: ChatRepository, sourceModelId: String, context: Context): ToolExecutionResult =
         withContext(Dispatchers.IO) {
             val args = runCatching { JSONObject(argsJson) }.getOrDefault(JSONObject())
             val title = args.optString("title").trim()
             if (title.isEmpty()) return@withContext ToolExecutionResult("Error: 'title' is required.", false)
             val initial = args.optString("initial_message").trim()
-            val session = repo.createSession(modelId = "", title = title)
+            // [FIX-NEW-1] P0: a session with modelId="" is a zombie — when the
+            // user opens it, findModelEntry("") fails and the chat silently
+            // falls back to an arbitrary first model. Inherit the SOURCE chat's
+            // model id; if even that is empty, refuse instead of writing a
+            // broken session.
+            val modelId = sourceModelId.ifBlank {
+                runCatching {
+                    (context.applicationContext as com.openminis.app.MinisApp)
+                        .providerRepository.allVisibleEntries().firstOrNull()?.model?.id
+                }.getOrNull().orEmpty()
+            }
+            if (modelId.isBlank()) {
+                return@withContext ToolExecutionResult("Error: no model configured — add an API/provider in Settings first.", false)
+            }
+            val session = repo.createSession(modelId = modelId, title = title)
             if (initial.isNotEmpty()) {
                 repo.appendMessage(session.id, "user", JSONArray().put(JSONObject().put("text", initial)).toString())
             }

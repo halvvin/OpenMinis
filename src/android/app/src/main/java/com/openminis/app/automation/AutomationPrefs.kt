@@ -52,6 +52,20 @@ class AutomationPrefs private constructor(context: Context) {
         get() = prefs.getBoolean(KEY_CROSS_CHAT, false)
         set(v) = prefs.edit().putBoolean(KEY_CROSS_CHAT, v).apply()
 
+    /**
+     * [FIX-NEW-5] Cross-chat granular mode: 0=OFF, 1=READ_ONLY
+     * (list/read/watch — no chat_send), 2=READ_WRITE (all 5 tools).
+     * Migration: legacy boolean ON → mode 2; absent → mode 0.
+     */
+    var crossChatMode: Int
+        get() = prefs.getInt(KEY_CROSS_CHAT_MODE, if (prefs.getBoolean(KEY_CROSS_CHAT, false)) 2 else 0)
+        set(v) {
+            prefs.edit()
+                .putInt(KEY_CROSS_CHAT_MODE, v)
+                .putBoolean(KEY_CROSS_CHAT, v != 0)
+                .apply()
+        }
+
     // ── Floating AI panel geometry (persists across sessions) ────────────
     var floatPanelOpen: Boolean
         get() = prefs.getBoolean(KEY_FP_OPEN, false)
@@ -122,6 +136,7 @@ class AutomationPrefs private constructor(context: Context) {
         private const val KEY_TERMUX = "auto.termux.enabled"
         private const val KEY_REVERSE_API = "auto.reverse_api.enabled"
         private const val KEY_CROSS_CHAT = "auto.cross_chat.enabled"
+        private const val KEY_CROSS_CHAT_MODE = "auto.cross_chat.mode"
         private const val KEY_AO_TYPE = "ao.server_type"
         private const val KEY_AO_HOST = "ao.host"
         private const val KEY_AO_PORT = "ao.port"

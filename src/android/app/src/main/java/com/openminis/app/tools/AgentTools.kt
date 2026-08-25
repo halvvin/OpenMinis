@@ -32,7 +32,7 @@ object AgentTools {
         termuxEnabled: Boolean = false,
         alwaysOnEnabled: Boolean = false,
         // [T-cross-chat] Cross-chat communication — OFF by default.
-        crossChatEnabled: Boolean = false,
+        crossChatMode: Int = 0,
     ): List<AgentToolDefinition> = buildList {
         add(shellExecuteDefinition())
         add(FileReadTool.definition())
@@ -51,12 +51,14 @@ object AgentTools {
             add(AutomationTools.alwaysOnSyncDefinition())
             add(AutomationTools.alwaysOnResumeDefinition())
         }
-        if (crossChatEnabled) {
+        if (crossChatMode == 1 || crossChatMode == 2) {
             add(CrossChatTools.chatListDefinition())
             add(CrossChatTools.chatReadDefinition())
+            add(CrossChatTools.chatWatchDefinition())
+        }
+        if (crossChatMode == 2) {
             add(CrossChatTools.chatSendDefinition())
             add(CrossChatTools.chatCreateDefinition())
-            add(CrossChatTools.chatWatchDefinition())
         }
     }
 

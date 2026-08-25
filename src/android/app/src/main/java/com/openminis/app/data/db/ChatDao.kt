@@ -89,7 +89,18 @@ interface ChatDao {
     @Query("DELETE FROM sessions WHERE id = :id")
     suspend fun deleteSession(id: String)
 
-    // Full-text search across session titles and message content
+    // Full-text search across session titles and message content.
+    // [FIX-NEW-2] ESCAPE '\\' so the repository can safely escape user/AI
+    // input wildcards — without it, a query of "%" matches every session.
+    @Query("""
+        SELECT DISTINCT s.* FROM sessions s
+        LEFT JOIN messages m ON m.session_id = s.id
+        WHERE s.title LIKE :pattern ESCAPE '\\' OR m.parts_json LIKE :pattern ESCAPE '\\'
+        ORDER BY s.updated_at DESC
+    """)
+    suspend fun searchSessionsEscaped(pattern: String): List<ChatSessionEntity>
+
+    /** Legacy unescaped search — kept for callers that pass trusted patterns. */
     @Query("""
         SELECT DISTINCT s.* FROM sessions s
         LEFT JOIN messages m ON m.session_id = s.id

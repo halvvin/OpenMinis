@@ -224,8 +224,16 @@ class ChatRepository(internal val dao: ChatDao) {
         return dao.listFolders().firstOrNull { it.name.trim().lowercase() == needle }
     }
 
-    suspend fun searchSessions(query: String): List<ChatSessionEntity> =
-        dao.searchSessions("%$query%")
+    suspend fun searchSessions(query: String): List<ChatSessionEntity> {
+        // [FIX-NEW-2] P0: escape LIKE wildcards so the AI cannot
+        // enumerate all chat titles via prompt injection
+        // (chat_list(query="%") → every session leaks).
+        val escaped = query
+            .replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
+        return dao.searchSessionsEscaped("%$escaped%")
+    }
 
     fun observeMessages(sessionId: String): Flow<List<MessageEntity>> =
         dao.observeMessages(sessionId)
