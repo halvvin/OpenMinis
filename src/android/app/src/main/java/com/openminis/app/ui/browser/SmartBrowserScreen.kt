@@ -815,11 +815,11 @@ private fun BoxScope.FloatingAiPanel(
     val screenW = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
     val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
     fun clamp() {
-        val w = panelW.coerceAtLeast(52f)   // bubble is 52dp, panel is panelW
+        val w = panelW.toFloat().coerceAtLeast(52f)   // bubble is 52dp, panel is panelW
         offsetX = offsetX.coerceIn(-(screenW - w).toFloat().coerceAtLeast(0f), 0f)
         offsetY = offsetY.coerceIn(0f, (screenH - panelH - 80).toFloat().coerceAtLeast(0f))
-        panelW = panelW.coerceIn(220f, screenW.toFloat())
-        panelH = panelH.coerceIn(240f, (screenH - 120).toFloat().coerceAtLeast(240f))
+        panelW = panelW.coerceIn(220, screenW)
+        panelH = panelH.coerceIn(240, (screenH - 120).coerceAtLeast(240))
     }
     LaunchedEffect(Unit) { clamp() }
     var input by remember { mutableStateOf("") }
