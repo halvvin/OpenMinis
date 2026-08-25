@@ -48,7 +48,10 @@ jobs:
           script: |
             set -x
             mkdir -p artifacts
-            APK=$(find "$GITHUB_WORKSPACE" -name '*debug*.apk' 2>/dev/null | head -1)
+            echo "PWD=$(pwd) GITHUB_WORKSPACE=$GITHUB_WORKSPACE"
+            ls -la src/android/app/build/outputs/apk/debug/ || true
+            find . -name '*.apk' 2>/dev/null | head -5
+            APK=$(find . -name '*.apk' 2>/dev/null | head -1)
             echo "APK=$APK"
             test -n "$APK"
 
