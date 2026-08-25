@@ -467,8 +467,75 @@ fun BrowserScreen(onBack: () -> Unit) {
 
                 // ── 4) Web content ──────────────────────────────────────
                 Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    // [T-webview-always] The WebView is composed UNCONDITIONALLY —
+                    // v4 skipped it for empty-URL tabs, so webViewRef was null and
+                    // the Go button did literally nothing on a new tab.
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = { ctx ->
+                            enforceTabBudget(active.id)
+                            webViewPool.getOrPut(active.id) {
+                                WebView(ctx).apply {
+                                    settings.javaScriptEnabled = true
+                                    settings.domStorageEnabled = true
+                                    settings.loadWithOverviewMode = true
+                                    settings.useWideViewPort = true
+                                }
+                            }.apply {
+                                webViewClient = object : WebViewClient() {
+                                    override fun shouldInterceptRequest(
+                                        view: WebView?,
+                                        request: WebResourceRequest?,
+                                    ): WebResourceResponse? {
+                                        // [T-har-capture] Record main-frame + XHR
+                                        // traffic for the Reverse API extension.
+                                        request?.let { req ->
+                                            val list = harLog.getOrPut(active.id) { mutableListOf() }
+                                            if (list.size < 500) {
+                                                list.add(HarEntry(req.method ?: "GET", req.url.toString(), System.currentTimeMillis()))
+                                            }
+                                        }
+                                        return null
+                                    }
+
+                                    override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
+                                        url?.let {
+                                            urlInput = it
+                                            updateTab(active.id) { cur -> cur.copy(url = it, title = view?.title ?: cur.title) }
+                                        }
+                                        canGoBack = view?.canGoBack() ?: false
+                                        canGoForward = view?.canGoForward() ?: false
+                                    }
+
+                                    override fun onReceivedError(
+                                        view: WebView?,
+                                        req: WebResourceRequest?,
+                                        err: android.webkit.WebResourceError?,
+                                    ) {
+                                        if (req?.isForMainFrame == true) {
+                                            pageError = err?.description?.toString() ?: "خطای شبکه"
+                                        }
+                                    }
+                                }
+                                webChromeClient = object : WebChromeClient() {
+                                    override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                        progress = newProgress
+                                    }
+                                }
+                                // [T-blank-page-fix] A pooled/recreated WebView's
+                                // getUrl() is "about:blank" — NOT blank — so the
+                                // old isNullOrBlank() check never fired.
+                                val cur = url
+                                if ((cur.isNullOrBlank() || cur == "about:blank") && active.url.isNotBlank()) {
+                                    loadUrl(active.url)
+                                }
+                            }
+                        },
+                        onRelease = { /* pooled */ },
+                    )
+
                     if (pageError != null) {
-                        // Friendly error page with retry.
+                        // Friendly error page with retry (overlay, non-blocking).
                         Column(
                             modifier = Modifier.fillMaxSize().padding(32.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -486,87 +553,6 @@ fun BrowserScreen(onBack: () -> Unit) {
                                 webViewPool[active.id]?.reload()
                             }) { Text("تلاش دوباره") }
                         }
-                    } else if (active.url.isBlank()) {
-                        Column(
-                            modifier = Modifier.fillMaxSize().padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Text("🌐", style = MaterialTheme.typography.displayMedium)
-                            Text(
-                                "آدرس یا عبارت جستجو را در نوار بالا وارد کن",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    } else {
-                        AndroidView(
-                            modifier = Modifier.fillMaxSize(),
-                            factory = { ctx ->
-                                enforceTabBudget(active.id)
-                                webViewPool.getOrPut(active.id) {
-                                    WebView(ctx).apply {
-                                        settings.javaScriptEnabled = true
-                                        settings.domStorageEnabled = true
-                                        settings.loadWithOverviewMode = true
-                                        settings.useWideViewPort = true
-                                    }
-                                }.apply {
-                                    webViewClient = object : WebViewClient() {
-                                        override fun shouldInterceptRequest(
-                                            view: WebView?,
-                                            request: WebResourceRequest?,
-                                        ): WebResourceResponse? {
-                                            // [T-har-capture] Record main-frame + XHR
-                                            // traffic for the Reverse API extension.
-                                            request?.let { req ->
-                                                val list = harLog.getOrPut(active.id) { mutableListOf() }
-                                                if (list.size < 500) {
-                                                    list.add(HarEntry(req.method ?: "GET", req.url.toString(), System.currentTimeMillis()))
-                                                }
-                                            }
-                                            return null
-                                        }
-
-                                        override fun doUpdateVisitedHistory(view: WebView?, url: String?, isReload: Boolean) {
-                                            url?.let {
-                                                urlInput = it
-                                                updateTab(active.id) { cur -> cur.copy(url = it, title = view?.title ?: cur.title) }
-                                            }
-                                            canGoBack = view?.canGoBack() ?: false
-                                            canGoForward = view?.canGoForward() ?: false
-                                        }
-
-                                        override fun onReceivedError(
-                                            view: WebView?,
-                                            req: WebResourceRequest?,
-                                            err: android.webkit.WebResourceError?,
-                                        ) {
-                                            if (req?.isForMainFrame == true) {
-                                                pageError = err?.description?.toString() ?: "خطای شبکه"
-                                            }
-                                        }
-                                    }
-                                    webChromeClient = object : WebChromeClient() {
-                                        override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                                            progress = newProgress
-                                        }
-                                    }
-                                    // [T-blank-page-fix] A pooled/recreated WebView's
-                                    // getUrl() is "about:blank" — NOT blank — so the
-                                    // old isNullOrBlank() check never fired and the
-                                    // page stayed white. Compare against about:blank
-                                    // explicitly and load the tab's stored URL.
-                                    val cur = url
-                                    if ((cur.isNullOrBlank() || cur == "about:blank") && active.url.isNotBlank()) {
-                                        loadUrl(active.url)
-                                    }
-                                }
-                            },
-                            onRelease = { /* pooled */ },
-                        )
-                    }
-
                     // ── 5) Floating AI panel (draggable, collapsible) ────
                     FloatingAiPanel(
                         open = aiPanelOpen,
@@ -643,7 +629,7 @@ private fun tab_url(tab: BrowserTab): String = tab.url
 /** Draggable, collapsible floating AI chat panel (spec §1-5). */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FloatingAiPanel(
+private fun BoxScope.FloatingAiPanel(
     open: Boolean,
     onOpenChange: (Boolean) -> Unit,
     tab: BrowserTab,
@@ -672,10 +658,10 @@ private fun FloatingAiPanel(
 
     if (!open) {
         // Collapsed bubble — tap to open, drag to move.
-        Box(modifier = Modifier.fillMaxSize()) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
+        // NOTE: no fillMaxSize wrapper — it would swallow every WebView touch.
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
                     .offset { IntOffset(offsetX.toInt(), offsetY.toInt()) }
                     .size(52.dp)
                     .background(MaterialTheme.colorScheme.primary, CircleShape)
@@ -696,12 +682,10 @@ private fun FloatingAiPanel(
                 contentAlignment = Alignment.Center,
             ) {
                 Text("🤖", style = MaterialTheme.typography.titleLarge)
-            }
         }
         return
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
     Card(
         modifier = Modifier
             .align(Alignment.TopEnd)
@@ -810,7 +794,6 @@ private fun FloatingAiPanel(
                 ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "ارسال") }
             }
         }
-    }
     }
 }
 
