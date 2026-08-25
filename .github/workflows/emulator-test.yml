@@ -48,7 +48,9 @@ jobs:
           script: |
             set -x
             mkdir -p artifacts
-            APK=$(ls src/android/app/build/outputs/apk/debug/*.apk | head -1)
+            APK=$(find "$GITHUB_WORKSPACE" -name '*debug*.apk' 2>/dev/null | head -1)
+            echo "APK=$APK"
+            test -n "$APK"
 
             echo "=== INSTALL ==="
             adb install -r "$APK"
