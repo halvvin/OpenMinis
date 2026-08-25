@@ -153,9 +153,30 @@ fun BrowserScreen(onBack: () -> Unit) {
     val modelEntries = remember { mutableStateOf<List<com.openminis.app.data.model.ModelEntry>>(emptyList()) }
     LaunchedEffect(Unit) {
         providerRepo.configLoaded.first { it }
-        modelEntries.value = runCatching { providerRepo.resolvedAgentLoopEntries() }.getOrDefault(emptyList())
+        // [T-models-fallback] Prefer the Agent Loop entries, but if the user
+        // never assigned models to the Agent Loop group, fall back to ALL
+        // entries of enabled providers (same rule as the chat model picker)
+        // so the browser model selector is never empty.
+        val loop = runCatching { providerRepo.resolvedAgentLoopEntries() }.getOrDefault(emptyList())
+        modelEntries.value = if (loop.isNotEmpty()) loop
+        else runCatching {
+            val cfg = providerRepo.config.value
+            val enabled = cfg.instances.filter { it.isEnabled }.map { it.id }.toSet()
+            cfg.modelEntries.filter { it.providerInstanceId in enabled && !it.isHidden }
+        }.getOrDefault(emptyList())
+        if (selectedEntryId.isEmpty() && modelEntries.value.isNotEmpty()) {
+            selectedEntryId = modelEntries.value.first().id
+        }
     }
     var selectedEntryId by remember { mutableStateOf(modelEntries.value.firstOrNull()?.id.orEmpty()) }
+    // [T-models-autoselect] If models finished loading AFTER first composition
+    // (empty at start), auto-select the first one so extensions/AI panel work
+    // without the user touching the selector.
+    LaunchedEffect(modelEntries.value.size) {
+        if (selectedEntryId.isEmpty() && modelEntries.value.isNotEmpty()) {
+            selectedEntryId = modelEntries.value.first().id
+        }
+    }
 
     // Extensions UI
     var openExtension by remember { mutableStateOf<String?>(null) }
@@ -227,6 +248,7 @@ fun BrowserScreen(onBack: () -> Unit) {
 
     fun runExtension(ext: BrowserExtension, tab: BrowserTab, webViewRef: WebView?) {
         val entry = modelEntries.value.firstOrNull { it.id == selectedEntryId }
+            ?: modelEntries.value.firstOrNull()   // [T-models-fallback] auto-select
         if (entry == null) {
             extResult = "❌ اول از منوی «انتخاب مدل» یک مدل/API انتخاب کن."
             return
@@ -789,14 +811,18 @@ private fun BoxScope.FloatingAiPanel(
     var offsetY by remember { mutableStateOf(autoPrefs.floatPanelY) }
     var panelW by remember { mutableStateOf(autoPrefs.floatPanelW) }
     var panelH by remember { mutableStateOf(autoPrefs.floatPanelH) }
-    // [FIX-6] Clamp to screen so the panel can never be dragged out of reach.
+    // [FIX-6] Clamp so the panel can never be dragged out of reach.
+    // The panel is TopEnd-aligned: the offset shifts it AFTER alignment, so a
+    // POSITIVE X pushes it off the RIGHT edge (the old clamp [0, w] did exactly
+    // that — dragging right made the panel vanish). X must stay ≤ 0.
     val screenW = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
     val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp
     fun clamp() {
-        offsetX = offsetX.coerceIn(0f, (screenW - 60).toFloat().coerceAtLeast(0f))
-        offsetY = offsetY.coerceIn(0f, (screenH - 80).toFloat().coerceAtLeast(0f))
+        val w = panelW.coerceAtLeast(52f)   // bubble is 52dp, panel is panelW
+        offsetX = offsetX.coerceIn(-(screenW - w).toFloat().coerceAtLeast(0f), 0f)
+        offsetY = offsetY.coerceIn(0f, (screenH - panelH - 80).toFloat().coerceAtLeast(0f))
         panelW = panelW.coerceIn(220, screenW)
-        panelH = panelH.coerceIn(240, screenH)
+        panelH = panelH.coerceIn(240, (screenH - 120).coerceAtLeast(240))
     }
     LaunchedEffect(Unit) { clamp() }
     var input by remember { mutableStateOf("") }
@@ -925,7 +951,15 @@ private fun BoxScope.FloatingAiPanel(
                         onMessagesChanged()
                         busy = true
                         scopeLaunch {
-                            val entries = runCatching { providerRepo.resolvedAgentLoopEntries() }.getOrDefault(emptyList())
+                            val entries = runCatching {
+                                val loop = providerRepo.resolvedAgentLoopEntries()
+                                if (loop.isNotEmpty()) loop
+                                else {
+                                    val cfg = providerRepo.config.value
+                                    val enabled = cfg.instances.filter { it.isEnabled }.map { it.id }.toSet()
+                                    cfg.modelEntries.filter { it.providerInstanceId in enabled && !it.isHidden }
+                                }
+                            }.getOrDefault(emptyList())
                             val entry = entries.firstOrNull { it.id == entryIdFor(modelTitle, providerRepo) }
                                 ?: entries.firstOrNull()
                             val reply = if (entry == null) "❌ مدلی تنظیم نشده — تنظیمات → Providers."
@@ -1038,9 +1072,19 @@ private fun ReverseApiPanel(
                 if (har.isEmpty()) { result = "اول صفحه را باز کن تا ترافیک ضبط شود."; return@TextButton }
                 busy = true
                 scope.launch {
-                    val entry = runCatching { providerRepo.resolvedAgentLoopEntries() }.getOrDefault(emptyList())
-                        .firstOrNull { it.id == selectedEntryId }
-                    result = if (entry == null) "❌ مدل انتخاب نشده."
+                    // [T-models-fallback] Same fallback as the browser: use the
+                    // Agent Loop entries, else ALL enabled-provider entries, so
+                    // "ساخت کلاینت API" works even when the user never assigned
+                    // models to the Agent Loop group.
+                    val loop = runCatching { providerRepo.resolvedAgentLoopEntries() }.getOrDefault(emptyList())
+                    val all = runCatching {
+                        val cfg = providerRepo.config.value
+                        val enabled = cfg.instances.filter { it.isEnabled }.map { it.id }.toSet()
+                        cfg.modelEntries.filter { it.providerInstanceId in enabled && !it.isHidden }
+                    }.getOrDefault(emptyList())
+                    val pool = if (loop.isNotEmpty()) loop else all
+                    val entry = pool.firstOrNull { it.id == selectedEntryId } ?: pool.firstOrNull()
+                    result = if (entry == null) "❌ مدلی در تنظیمات پیدا نشد — اول یک API در تنظیمات اصلی اپ اضافه کن."
                     else runCatching {
                         val harText = har.take(60).joinToString("\n") { "${it.method} ${it.url}" }
                         callModel(providerRepo, entry, "از این ترافیک شبکه‌ی ضبط‌شده، یک کلاینت API تمیز و تایپ‌شده به زبان Python تولید کن. endpointها، پارامترها و هدرهای لازم را استخراج کن:\n$harText", "")

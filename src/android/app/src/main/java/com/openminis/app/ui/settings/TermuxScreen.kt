@@ -71,6 +71,7 @@ fun TermuxScreen(onBack: () -> Unit) {
     val history = remember { mutableStateListOf<String>() }
     var historyIdx by remember { mutableStateOf(-1) }
     var lastCmd by remember { mutableStateOf("") }
+    var kbOn by remember { mutableStateOf(true) }
     // Auto-open the keyboard when entering the terminal.
     val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
     LaunchedEffect(loaded) { if (loaded) focusRequester.requestFocus() }
@@ -181,30 +182,64 @@ fun TermuxScreen(onBack: () -> Unit) {
                 }
             }
 
-            // ── Terminal key row: history ↑/↓ + shell characters ────────
+            // ── Terminal keyboard: ONE toggleable section with ALL keys ──
             Row(
-                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                listOf("↑", "↓", "TAB", "/", "~", "-", "|", ">", ">>", "<", "&", "*", ".", "_", "\"", "'", "\$", "&&", "sudo ").forEach { k ->
-                    TextButton(onClick = {
-                        when (k) {
-                            "↑" -> {
-                                if (history.isNotEmpty()) {
-                                    historyIdx = if (historyIdx == -1) history.size - 1 else (historyIdx - 1).coerceAtLeast(0)
-                                    command = history[historyIdx]
+                Text("کیبورد ترمینال", style = MaterialTheme.typography.bodyLarge)
+                Switch(
+                    checked = kbOn,
+                    onCheckedChange = { kbOn = it },
+                )
+            }
+            if (kbOn) {
+                // Row 1 — history & control keys
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    listOf("↑", "↓", "ESC", "CTRL", "ALT", "TAB").forEach { k ->
+                        TextButton(onClick = {
+                            when (k) {
+                                "↑" -> {
+                                    if (history.isNotEmpty()) {
+                                        historyIdx = if (historyIdx == -1) history.size - 1 else (historyIdx - 1).coerceAtLeast(0)
+                                        command = history[historyIdx]
+                                    }
                                 }
-                            }
-                            "↓" -> {
-                                if (history.isNotEmpty()) {
-                                    historyIdx = (historyIdx + 1).coerceAtMost(history.size - 1)
-                                    command = history[historyIdx]
+                                "↓" -> {
+                                    if (history.isNotEmpty()) {
+                                        historyIdx = (historyIdx + 1).coerceAtMost(history.size - 1)
+                                        command = history[historyIdx]
+                                    }
                                 }
+                                "TAB" -> command += "\t"
+                                "ESC", "CTRL", "ALT" -> log("${k} فقط در ترمینال داخلی (شل Minis) کار می‌کند")
+                                else -> command += k
                             }
-                            "TAB" -> command += "\t"
-                            else -> command += k
-                        }
-                    }) { Text(k, style = MaterialTheme.typography.labelMedium) }
+                        }) { Text(k, style = MaterialTheme.typography.labelMedium) }
+                    }
+                }
+                // Row 2 — digits
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    ("0".."9").forEach { d ->
+                        TextButton(onClick = { command += d }) { Text(d, style = MaterialTheme.typography.labelMedium) }
+                    }
+                    TextButton(onClick = { command = "" }) { Text("پاک کردن", style = MaterialTheme.typography.labelMedium) }
+                }
+                // Row 3 — shell characters
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    listOf("/", "~", "-", "|", ">", ">>", "<", "&", "*", ".", "_", "\"", "'", "\$", "&&", "sudo ").forEach { k ->
+                        TextButton(onClick = { command += k }) { Text(k, style = MaterialTheme.typography.labelMedium) }
+                    }
                 }
             }
 
