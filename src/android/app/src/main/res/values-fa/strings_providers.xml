@@ -1,90 +1,71 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Persian (فارسی) — part 3: providers, models, onboarding, dialogs.
-     All keys verified against values/strings.xml. -->
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <!-- Provider chooser (titles were hard-coded upstream → now stringResource) -->
-    <string name="add_provider_type_openai">OpenAI / API سازگار</string>
-    <string name="add_provider_type_anthropic">Anthropic / API سازگار</string>
-    <string name="add_provider_type_gemini">Google Gemini</string>
-    <string name="add_provider_type_openrouter">OpenRouter</string>
-    <string name="add_provider_type_xai">xAI (Grok)</string>
-    <string name="add_provider_type_kimi">Kimi Code</string>
-
-    <!-- Provider list / detail -->
-    <string name="provider_list_add_provider">افزودن سرویس‌دهنده</string>
-    <string name="provider_list_no_providers_configured">سرویس‌دهنده‌ای تنظیم نشده</string>
-    <string name="provider_list_add_a_provider_to_get_started">برای شروع یک سرویس‌دهنده اضافه کن</string>
-    <string name="provider_list_api_key">کلید API</string>
-    <string name="provider_list_disabled">غیرفعال</string>
-    <string name="provider_detail_export">خروجی</string>
-    <string name="provider_detail_label">برچسب</string>
-    <string name="provider_detail_custom_api_base">آدرس پایه API سفارشی</string>
-    <string name="provider_detail_api_format">قالب API</string>
-    <string name="provider_detail_chat_completions">Chat Completions</string>
-
-    <!-- Onboarding -->
-    <string name="onboarding_provider_title">اتصال به مدل</string>
-    <string name="onboarding_filter_models">فیلتر</string>
-    <string name="onboarding_loading_models">در حال دریافت مدل‌ها…</string>
-
-    <!-- Chat / errors -->
-    <string name="chat_error_stream_dropped_partial">اتصال قطع شد — بخشی از پاسخ دریافت شد</string>
-    <string name="read_aloud_unavailable">خواندن با صدا برای این مدل ممکن نیست</string>
-
-    <!-- MCP -->
-    <string name="mcp_title">یکپارچه‌سازی MCP</string>
-    <string name="mcp_add">افزودن سرور</string>
-    <string name="mcp_edit">ویرایش</string>
-    <string name="mcp_section_servers">سرورها</string>
-    <string name="mcp_empty_title">سروری اضافه نشده</string>
-    <string name="mcp_transport_http">HTTP</string>
-    <string name="mcp_transport_sse">SSE</string>
-    <string name="mcp_transport_stdio">STDIO</string>
-    <string name="mcp_form_name">نام</string>
-    <string name="mcp_form_url">آدرس</string>
-    <string name="mcp_form_command">دستور</string>
-    <string name="mcp_form_args">آرگومان‌ها</string>
-    <string name="mcp_form_env">متغیرهای محیطی</string>
-    <string name="mcp_form_save">ذخیره</string>
-    <string name="mcp_delete_title">حذف سرور؟</string>
-    <string name="mcp_import_instruction">پیکربندی JSON را اینجا بچسبانید</string>
-
-    <!-- Soul -->
-    <string name="soul_settings_title">شخصیت (SOUL)</string>
-    <string name="soul_section_preview">پیش‌نمایش</string>
-    <string name="soul_section_identity">هویت</string>
-    <string name="soul_section_personality">شخصیت</string>
-    <string name="soul_field_name">نام</string>
-    <string name="soul_field_style">سبک</string>
-    <string name="soul_field_lang">زبان</string>
-    <string name="soul_lang_auto">خودکار</string>
-    <string name="soul_lang_zh">چینی</string>
-    <string name="soul_lang_en">انگلیسی</string>
-    <string name="soul_save">ذخیره</string>
-    <string name="soul_cancel">انصراف</string>
-    <string name="soul_ok">باشه</string>
-    <string name="soul_restore_default">بازگردانی پیش‌فرض</string>
-    <string name="soul_count_chars">نویسه</string>
-    <string name="soul_count_words">واژه</string>
-
-    <!-- Offload permission dialog -->
-    <string name="offload_perm_dialog_title">اجازه دسترسی</string>
-    <string name="offload_perm_allow_session">اجازه برای این گفتگو</string>
-    <string name="offload_perm_allow_once">اجازه یک‌بار</string>
-    <string name="offload_perm_deny_session">رد کردن</string>
-
-    <!-- Overlay -->
-    <string name="overlay_dismiss">بستن</string>
-    <string name="overlay_completion_completed">تمام شد</string>
-    <string name="overlay_completion_failed">ناموفق بود</string>
-    <string name="overlay_completion_cancelled">لغو شد</string>
-    <string name="overlay_completion_timeout">مهلت تمام شد</string>
-
-    <!-- Export -->
-    <string name="export_progress_running">در حال ساخت خروجی…</string>
-    <string name="export_progress_done">آماده شد</string>
-    <string name="export_progress_failed">ناموفق بود</string>
-    <string name="export_summary_messages">پیام‌ها</string>
-    <string name="export_summary_attachments">پیوست‌ها</string>
-    <string name="export_summary_size">حجم</string>
+  <string name="add_provider_type_openai">OpenAI / API سازگار</string>
+  <string name="add_provider_type_anthropic">Anthropic / API سازگار</string>
+  <string name="add_provider_type_gemini">Google Gemini</string>
+  <string name="add_provider_type_openrouter">OpenRouter</string>
+  <string name="add_provider_type_xai">xAI (Grok)</string>
+  <string name="add_provider_type_kimi">Kimi Code</string>
+  <string name="provider_list_add_provider">افزودن سرویس‌دهنده</string>
+  <string name="provider_list_no_providers_configured">سرویس‌دهنده‌ای تنظیم نشده</string>
+  <string name="provider_list_add_a_provider_to_get_started">برای شروع یک سرویس‌دهنده اضافه کن</string>
+  <string name="provider_list_api_key">کلید API</string>
+  <string name="provider_list_disabled">غیرفعال</string>
+  <string name="provider_detail_export">خروجی</string>
+  <string name="provider_detail_label">برچسب</string>
+  <string name="provider_detail_custom_api_base">آدرس پایه API سفارشی</string>
+  <string name="provider_detail_api_format">قالب API</string>
+  <string name="provider_detail_chat_completions">Chat Completions</string>
+  <string name="onboarding_provider_title">اتصال به مدل</string>
+  <string name="onboarding_filter_models">فیلتر</string>
+  <string name="onboarding_loading_models">در حال دریافت مدل‌ها…</string>
+  <string name="chat_error_stream_dropped_partial">اتصال قطع شد — بخشی از پاسخ دریافت شد</string>
+  <string name="read_aloud_unavailable">خواندن با صدا برای این مدل ممکن نیست</string>
+  <string name="mcp_title">یکپارچه‌سازی MCP</string>
+  <string name="mcp_add">افزودن سرور</string>
+  <string name="mcp_edit">ویرایش</string>
+  <string name="mcp_section_servers">سرورها</string>
+  <string name="mcp_empty_title">سروری اضافه نشده</string>
+  <string name="mcp_transport_http">HTTP</string>
+  <string name="mcp_transport_sse">SSE</string>
+  <string name="mcp_transport_stdio">STDIO</string>
+  <string name="mcp_form_name">نام</string>
+  <string name="mcp_form_url">آدرس</string>
+  <string name="mcp_form_command">دستور</string>
+  <string name="mcp_form_args">آرگومان‌ها</string>
+  <string name="mcp_form_env">متغیرهای محیطی</string>
+  <string name="mcp_form_save">ذخیره</string>
+  <string name="mcp_delete_title">حذف %1$s؟</string>
+  <string name="mcp_import_instruction">پیکربندی JSON را اینجا بچسبانید</string>
+  <string name="soul_settings_title">شخصیت (SOUL)</string>
+  <string name="soul_section_preview">پیش‌نمایش</string>
+  <string name="soul_section_identity">هویت</string>
+  <string name="soul_section_personality">شخصیت</string>
+  <string name="soul_field_name">نام</string>
+  <string name="soul_field_style">سبک</string>
+  <string name="soul_field_lang">زبان</string>
+  <string name="soul_lang_auto">خودکار</string>
+  <string name="soul_lang_zh">چینی</string>
+  <string name="soul_lang_en">انگلیسی</string>
+  <string name="soul_save">ذخیره</string>
+  <string name="soul_cancel">انصراف</string>
+  <string name="soul_ok">باشه</string>
+  <string name="soul_restore_default">بازگردانی پیش‌فرض</string>
+  <string name="soul_count_chars">%1$d / %2$d کاراکتر</string>
+  <string name="soul_count_words">%1$d / %2$d کلمه</string>
+  <string name="offload_perm_dialog_title">اجازه دسترسی</string>
+  <string name="offload_perm_allow_session">اجازه برای این گفتگو</string>
+  <string name="offload_perm_allow_once">اجازه یک‌بار</string>
+  <string name="offload_perm_deny_session">رد کردن</string>
+  <string name="overlay_dismiss">بستن</string>
+  <string name="overlay_completion_completed">تمام شد</string>
+  <string name="overlay_completion_failed">ناموفق بود</string>
+  <string name="overlay_completion_cancelled">لغو شد</string>
+  <string name="overlay_completion_timeout">مهلت تمام شد</string>
+  <string name="export_progress_running">در حال خروجی گرفتن %1$d / %2$d…</string>
+  <string name="export_progress_done">آماده شد</string>
+  <string name="export_progress_failed">ناموفق بود</string>
+  <string name="export_summary_messages">پیام‌ها</string>
+  <string name="export_summary_attachments">پیوست‌ها</string>
+  <string name="export_summary_size">حجم</string>
 </resources>

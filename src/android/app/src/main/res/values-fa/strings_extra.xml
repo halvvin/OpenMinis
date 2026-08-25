@@ -1,159 +1,139 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Persian (فارسی) — part 2: session list, groups, browser, terminal,
-     appearance, env vars, logs, memory, permissions. Untranslated keys
-     fall back to English automatically. -->
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <!-- Session list -->
-    <string name="sessionlist_section_today">امروز</string>
-    <string name="sessionlist_section_yesterday">دیروز</string>
-    <string name="sessionlist_section_this_week">این هفته</string>
-    <string name="sessionlist_section_this_month">این ماه</string>
-    <string name="sessionlist_section_earlier">قدیمی‌تر</string>
-    <string name="sessionlist_select_title">انتخاب چت‌ها</string>
-    <string name="sessionlist_n_selected">%d مورد انتخاب شد</string>
-    <string name="sessionlist_select_all">انتخاب همه</string>
-    <string name="sessionlist_deselect_all">لغو انتخاب</string>
-    <string name="sessionlist_select_action">انتخاب</string>
-    <string name="sessionlist_settings">تنظیمات</string>
-    <string name="sessionlist_shell">ترمینال</string>
-    <string name="sessionlist_shell_terminal">ترمینال</string>
-    <string name="sessionlist_rootfs_management">مدیریت ذخیره‌سازی</string>
-    <string name="sessionlist_open_browser">مرورگر</string>
-    <string name="sessionlist_browser_settings">تنظیمات مرورگر</string>
-    <string name="sessionlist_pin">سنجاق کردن</string>
-    <string name="sessionlist_unpin">برداشتن سنجاق</string>
-    <string name="sessionlist_export">خروجی گرفتن</string>
-    <string name="sessionlist_export_json">خروجی JSON</string>
-    <string name="sessionlist_export_plain">خروجی متن ساده</string>
-    <string name="sessionlist_edit_title_category">ویرایش عنوان</string>
-    <string name="sessionlist_duplicate">تکثیر گفتگو</string>
-    <string name="sessionlist_search_action">جستجو</string>
-    <string name="sessionlist_dismiss">بستن</string>
-    <string name="sessionlist_delete_one_title">حذف این گفتگو؟</string>
-    <string name="sessionlist_delete_n_title">حذف %d گفتگو؟</string>
-    <string name="sessionlist_delete_message">این عمل قابل بازگشت نیست.</string>
-    <string name="sessionlist_regenerate_title">ساخت دوباره عنوان</string>
-    <string name="sessionlist_regenerating_title">در حال ساخت عنوان…</string>
-
-    <!-- Groups -->
-    <string name="group_section_header">پوشه‌ها</string>
-    <string name="group_none">بدون پوشه</string>
-    <string name="group_create">ساخت پوشه</string>
-    <string name="group_new_name_hint">نام پوشه</string>
-    <string name="group_name_hint">نام</string>
-    <string name="group_desc_hint">توضیح (اختیاری)</string>
-    <string name="group_rename">تغییر نام</string>
-    <string name="group_move_action">انتقال</string>
-    <string name="group_move_to">انتقال به پوشه…</string>
-    <string name="group_collapse">جمع کردن</string>
-    <string name="group_expand">باز کردن</string>
-    <string name="group_dissolve">منحل کردن پوشه</string>
-    <string name="group_delete_confirm_title">حذف پوشه؟</string>
-
-    <!-- Browser -->
-    <string name="browser_title">مرورگر</string>
-    <string name="browser_new_tab">تب جدید</string>
-    <string name="browser_close_tab">بستن تب</string>
-    <string name="browser_search_placeholder">جستجو یا آدرس…</string>
-    <string name="browser_no_tab_open">تبی باز نیست</string>
-    <string name="browser_enter_url_hint">آدرس را وارد کنید</string>
-    <string name="browser_nav_back">عقب</string>
-    <string name="browser_nav_forward">جلو</string>
-    <string name="browser_stop">توقف</string>
-    <string name="browser_reload">بارگذاری مجدد</string>
-    <string name="browser_history_action">تاریخچه</string>
-    <string name="browser_history_title">تاریخچه</string>
-    <string name="browser_history_clear">پاک کردن تاریخچه</string>
-    <string name="browser_history_empty_title">تاریخچه خالی است</string>
-    <string name="browser_history_search">جستجو در تاریخچه…</string>
-    <string name="browser_settings_title">تنظیمات مرورگر</string>
-    <string name="browser_settings_done">تمام</string>
-    <string name="browser_settings_user_agent">عامل کاربر (User-Agent)</string>
-    <string name="browser_settings_ua_mobile_chrome">کروم موبایل</string>
-    <string name="browser_settings_ua_desktop_chrome">کروم دسکتاپ</string>
-    <string name="browser_settings_ua_custom">سفارشی</string>
-    <string name="browser_settings_apply">اعمال</string>
-    <string name="browser_settings_cookies_title">کوکی‌ها</string>
-    <string name="browser_settings_clear_all_cookies">پاک کردن همه کوکی‌ها</string>
-    <string name="chat_typing_indicator">در حال نوشتن…</string>
-    <string name="chat_input_placeholder">پیام…</string>
-
-    <!-- Terminal -->
-    <string name="terminal_title">ترمینال</string>
-    <string name="terminal_clear">پاک کردن</string>
-    <string name="terminal_show_keyboard">نمایش کیبورد</string>
-    <string name="terminal_hide_keyboard">پنهان کردن کیبورد</string>
-    <string name="common_back">بازگشت</string>
-    <string name="common_cancel">انصراف</string>
-    <string name="common_delete">حذف</string>
-    <string name="common_save">ذخیره</string>
-    <string name="common_edit">ویرایش</string>
-    <string name="common_share">اشتراک</string>
-    <string name="common_copy">کپی</string>
-
-    <!-- Appearance -->
-    <string name="appearance_title">ظاهر</string>
-    <string name="appearance_section_theme">پوسته</string>
-    <string name="appearance_theme_system">سیستم</string>
-    <string name="appearance_theme_light">روشن</string>
-    <string name="appearance_theme_dark">تاریک</string>
-    <string name="appearance_section_language">زبان</string>
-    <string name="appearance_language_footer">زبان رابط برنامه. تغییر آن بلافاصله اعمال می‌شود.</string>
-    <string name="appearance_section_font_size">اندازه فونت</string>
-    <string name="appearance_font_chat_input">ورودی چت</string>
-    <string name="appearance_font_message">پیام‌ها</string>
-    <string name="appearance_font_reset">بازنشانی</string>
-    <string name="appearance_section_app_icon">آیکون برنامه</string>
-    <string name="appearance_app_icon_auto">خودکار</string>
-    <string name="appearance_app_icon_light">روشن</string>
-    <string name="appearance_app_icon_dark">تاریک</string>
-    <string name="appearance_section_launch">شروع برنامه</string>
-    <string name="appearance_launch_auto">خودکار</string>
-    <string name="appearance_launch_last">آخرین گفتگو</string>
-    <string name="appearance_launch_new">گفتگوی جدید</string>
-    <string name="appearance_launch_home">فهرست اصلی</string>
-    <string name="appearance_return_key_send">دکمه بازگشت = ارسال</string>
-    <string name="appearance_return_key_newline">دکمه بازگشت = خط جدید</string>
-
-    <!-- Env vars -->
-    <string name="env_var_title">متغیرهای محیطی</string>
-    <string name="env_var_add">افزودن متغیر</string>
-    <string name="env_var_field_name">نام</string>
-    <string name="env_var_field_value">مقدار</string>
-    <string name="env_var_field_note">یادداشت (اختیاری)</string>
-    <string name="env_var_toggle_visibility">نمایش/پنهان کردن مقدار</string>
-    <string name="env_var_error_invalid_key">نام نامعتبر است</string>
-    <string name="env_var_error_duplicate">این نام قبلاً وجود دارد</string>
-
-    <!-- Logs -->
-    <string name="log_title">لاگ‌ها</string>
-    <string name="log_share_all">اشتراک همه</string>
-    <string name="log_section_logging">ثبت لاگ</string>
-    <string name="log_enable_switch">فعال بودن ثبت لاگ</string>
-    <string name="log_section_files">فایل‌های لاگ</string>
-    <string name="log_no_files">فایلی وجود ندارد</string>
-    <string name="log_delete_all_title">حذف همه لاگ‌ها؟</string>
-    <string name="log_delete_confirm">حذف</string>
-    <string name="log_not_found">پیدا نشد</string>
-    <string name="log_error_reading">خطا در خواندن فایل</string>
-
-    <!-- Memory -->
-    <string name="memory_title">حافظه</string>
-    <string name="settings_memory_global_enabled_title">حافظه سراسری</string>
-    <string name="memory_empty_title">هنوز حافظه‌ای نوشته نشده</string>
-    <string name="memory_section_files">فایل‌ها</string>
-    <string name="memory_delete_confirm_title">حذف شود؟</string>
-    <string name="memory_editor_placeholder">محتوای حافظه…</string>
-
-    <!-- Permissions -->
-    <string name="perm_title">مجوزها</string>
-    <string name="perm_reset_all">بازنشانی همه</string>
-    <string name="perm_level_bypass">همیشه اجازه</string>
-    <string name="perm_level_ask_once">یک‌بار بپرس</string>
-    <string name="perm_level_not_allowed">اجازه داده نشده</string>
-    <string name="perm_section_privacy">حریم خصوصی</string>
-    <string name="perm_section_media">رسانه</string>
-    <string name="perm_section_system">سیستم</string>
-    <string name="perm_a11y_open_settings">باز کردن تنظیمات</string>
-    <string name="perm_system_authorization">مجوز سیستم</string>
+  <string name="sessionlist_section_today">امروز</string>
+  <string name="sessionlist_section_yesterday">دیروز</string>
+  <string name="sessionlist_section_this_week">این هفته</string>
+  <string name="sessionlist_section_this_month">این ماه</string>
+  <string name="sessionlist_section_earlier">قدیمی‌تر</string>
+  <string name="sessionlist_select_title">انتخاب چت‌ها</string>
+  <string name="sessionlist_n_selected">%1$d انتخاب شده</string>
+  <string name="sessionlist_select_all">انتخاب همه</string>
+  <string name="sessionlist_deselect_all">لغو انتخاب</string>
+  <string name="sessionlist_select_action">انتخاب</string>
+  <string name="sessionlist_settings">تنظیمات</string>
+  <string name="sessionlist_shell">ترمینال</string>
+  <string name="sessionlist_shell_terminal">ترمینال</string>
+  <string name="sessionlist_rootfs_management">مدیریت ذخیره‌سازی</string>
+  <string name="sessionlist_open_browser">مرورگر</string>
+  <string name="sessionlist_browser_settings">تنظیمات مرورگر</string>
+  <string name="sessionlist_pin">سنجاق کردن</string>
+  <string name="sessionlist_unpin">برداشتن سنجاق</string>
+  <string name="sessionlist_export">خروجی گرفتن</string>
+  <string name="sessionlist_export_json">خروجی JSON</string>
+  <string name="sessionlist_export_plain">خروجی متن ساده</string>
+  <string name="sessionlist_edit_title_category">ویرایش عنوان</string>
+  <string name="sessionlist_duplicate">تکثیر گفتگو</string>
+  <string name="sessionlist_search_action">جستجو</string>
+  <string name="sessionlist_dismiss">بستن</string>
+  <string name="sessionlist_delete_one_title">حذف این گفتگو؟</string>
+  <string name="sessionlist_delete_n_title">حذف %1$d گفتگو؟</string>
+  <string name="sessionlist_delete_message">این عمل قابل بازگشت نیست.</string>
+  <string name="sessionlist_regenerate_title">ساخت دوباره عنوان</string>
+  <string name="sessionlist_regenerating_title">در حال ساخت عنوان…</string>
+  <string name="group_section_header">پوشه‌ها</string>
+  <string name="group_none">بدون پوشه</string>
+  <string name="group_create">ساخت پوشه</string>
+  <string name="group_new_name_hint">نام پوشه</string>
+  <string name="group_name_hint">نام</string>
+  <string name="group_desc_hint">توضیح (اختیاری)</string>
+  <string name="group_rename">تغییر نام</string>
+  <string name="group_move_action">انتقال</string>
+  <string name="group_move_to">انتقال به پوشه…</string>
+  <string name="group_collapse">جمع کردن</string>
+  <string name="group_expand">باز کردن</string>
+  <string name="group_dissolve">منحل کردن پوشه</string>
+  <string name="group_delete_confirm_title">حذف پوشه؟</string>
+  <string name="browser_title">مرورگر</string>
+  <string name="browser_new_tab">تب جدید</string>
+  <string name="browser_close_tab">بستن تب</string>
+  <string name="browser_search_placeholder">جستجو یا آدرس…</string>
+  <string name="browser_no_tab_open">تبی باز نیست</string>
+  <string name="browser_enter_url_hint">آدرس را وارد کنید</string>
+  <string name="browser_nav_back">عقب</string>
+  <string name="browser_nav_forward">جلو</string>
+  <string name="browser_stop">توقف</string>
+  <string name="browser_reload">بارگذاری مجدد</string>
+  <string name="browser_history_action">تاریخچه</string>
+  <string name="browser_history_title">تاریخچه</string>
+  <string name="browser_history_clear">پاک کردن تاریخچه</string>
+  <string name="browser_history_empty_title">تاریخچه خالی است</string>
+  <string name="browser_history_search">جستجو در تاریخچه…</string>
+  <string name="browser_settings_title">تنظیمات مرورگر</string>
+  <string name="browser_settings_done">تمام</string>
+  <string name="browser_settings_user_agent">عامل کاربر (User-Agent)</string>
+  <string name="browser_settings_ua_mobile_chrome">کروم موبایل</string>
+  <string name="browser_settings_ua_desktop_chrome">کروم دسکتاپ</string>
+  <string name="browser_settings_ua_custom">سفارشی</string>
+  <string name="browser_settings_apply">اعمال</string>
+  <string name="browser_settings_cookies_title">کوکی‌ها</string>
+  <string name="browser_settings_clear_all_cookies">پاک کردن همه کوکی‌ها</string>
+  <string name="chat_typing_indicator">%1$s در حال فکر کردن است</string>
+  <string name="chat_input_placeholder">پیام به %1$s (@ برای اشاره به فایل)</string>
+  <string name="terminal_title">ترمینال</string>
+  <string name="terminal_clear">پاک کردن</string>
+  <string name="terminal_show_keyboard">نمایش کیبورد</string>
+  <string name="terminal_hide_keyboard">پنهان کردن کیبورد</string>
+  <string name="common_back">بازگشت</string>
+  <string name="common_cancel">انصراف</string>
+  <string name="common_delete">حذف</string>
+  <string name="common_save">ذخیره</string>
+  <string name="common_edit">ویرایش</string>
+  <string name="common_share">اشتراک</string>
+  <string name="common_copy">کپی</string>
+  <string name="appearance_title">ظاهر</string>
+  <string name="appearance_section_theme">پوسته</string>
+  <string name="appearance_theme_system">سیستم</string>
+  <string name="appearance_theme_light">روشن</string>
+  <string name="appearance_theme_dark">تاریک</string>
+  <string name="appearance_section_language">زبان</string>
+  <string name="appearance_language_footer">زبان رابط برنامه. تغییر آن بلافاصله اعمال می‌شود.</string>
+  <string name="appearance_section_font_size">اندازه فونت</string>
+  <string name="appearance_font_chat_input">ورودی چت</string>
+  <string name="appearance_font_message">پیام‌ها</string>
+  <string name="appearance_font_reset">بازنشانی</string>
+  <string name="appearance_section_app_icon">آیکون برنامه</string>
+  <string name="appearance_app_icon_auto">خودکار</string>
+  <string name="appearance_app_icon_light">روشن</string>
+  <string name="appearance_app_icon_dark">تاریک</string>
+  <string name="appearance_section_launch">شروع برنامه</string>
+  <string name="appearance_launch_auto">خودکار</string>
+  <string name="appearance_launch_last">آخرین گفتگو</string>
+  <string name="appearance_launch_new">گفتگوی جدید</string>
+  <string name="appearance_launch_home">فهرست اصلی</string>
+  <string name="appearance_return_key_send">دکمه بازگشت = ارسال</string>
+  <string name="appearance_return_key_newline">دکمه بازگشت = خط جدید</string>
+  <string name="env_var_title">متغیرهای محیطی</string>
+  <string name="env_var_add">افزودن متغیر</string>
+  <string name="env_var_field_name">نام</string>
+  <string name="env_var_field_value">مقدار</string>
+  <string name="env_var_field_note">یادداشت (اختیاری)</string>
+  <string name="env_var_toggle_visibility">نمایش/پنهان کردن مقدار</string>
+  <string name="env_var_error_invalid_key">نام نامعتبر است</string>
+  <string name="env_var_error_duplicate">این نام قبلاً وجود دارد</string>
+  <string name="log_title">لاگ‌ها</string>
+  <string name="log_share_all">اشتراک همه</string>
+  <string name="log_section_logging">ثبت لاگ</string>
+  <string name="log_enable_switch">فعال بودن ثبت لاگ</string>
+  <string name="log_section_files">فایل‌های لاگ</string>
+  <string name="log_no_files">فایلی وجود ندارد</string>
+  <string name="log_delete_all_title">حذف همه لاگ‌ها؟</string>
+  <string name="log_delete_confirm">حذف</string>
+  <string name="log_not_found">پیدا نشد</string>
+  <string name="log_error_reading">خطا در خواندن لاگ: %1$s</string>
+  <string name="memory_title">حافظه</string>
+  <string name="settings_memory_global_enabled_title">حافظه سراسری</string>
+  <string name="memory_empty_title">هنوز حافظه‌ای نوشته نشده</string>
+  <string name="memory_section_files">فایل‌ها</string>
+  <string name="memory_delete_confirm_title">حذف %1$s؟</string>
+  <string name="memory_editor_placeholder">محتوای حافظه…</string>
+  <string name="perm_title">مجوزها</string>
+  <string name="perm_reset_all">بازنشانی همه</string>
+  <string name="perm_level_bypass">همیشه اجازه</string>
+  <string name="perm_level_ask_once">یک‌بار بپرس</string>
+  <string name="perm_level_not_allowed">اجازه داده نشده</string>
+  <string name="perm_section_privacy">حریم خصوصی</string>
+  <string name="perm_section_media">رسانه</string>
+  <string name="perm_section_system">سیستم</string>
+  <string name="perm_a11y_open_settings">باز کردن تنظیمات</string>
+  <string name="perm_system_authorization">مجوز سیستم</string>
 </resources>
