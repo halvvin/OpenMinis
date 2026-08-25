@@ -842,6 +842,15 @@ class ChatViewModel(
                 providerRepository, context,
             ),
             memoryEnabled = _memoryEnabled.value,
+            termuxEnabled = runCatching {
+                com.openminis.app.automation.AutomationPrefs.get(context).termuxEnabled
+            }.getOrDefault(false),
+            alwaysOnEnabled = runCatching {
+                com.openminis.app.automation.AutomationPrefs.get(context).alwaysOnEnabled
+            }.getOrDefault(false),
+            crossChatEnabled = runCatching {
+                com.openminis.app.automation.AutomationPrefs.get(context).crossChatEnabled
+            }.getOrDefault(false),
         )
 
     /**
@@ -5710,9 +5719,9 @@ class ChatViewModel(
     private fun keepWorkingOnTaskCompleted() {
         try {
             val prefs = keepWorkingPrefs()
-            if (prefs.activeSessionId == realSessionId.ifEmpty { sessionId }) {
-                prefs.resetTaskState()
-            }
+            // [FIX-4] Per-session counters: a successful turn in ANY session
+            // clears that session's own task state — no cross-chat race.
+            prefs.resetTaskState(realSessionId.ifEmpty { sessionId })
         } catch (_: Exception) { /* never break the chat path */ }
     }
 
@@ -5730,27 +5739,25 @@ class ChatViewModel(
             if (!isRecoverableForKeepWorking(cause)) return
             val sid = realSessionId.ifEmpty { sessionId }
             if (sid.isEmpty()) return
-            // [T-keep-working-chat-filter] When the user listed target chat
-            // names, only those chats are shepherded. Resolve the session
-            // title synchronously (cheap single-row DB read on the caller
-            // thread is avoided — we do it inside the scheduling coroutine
-            // below instead; here a quick cached check runs first so chats
-            // already known not to match skip scheduling entirely).
-            if (config.chatFilterEnabled && config.targetChats.isEmpty()) return
-            if (prefs.activeSessionId != sid) {
-                prefs.activeSessionId = sid
-                prefs.attemptCount = 0
+            // [FIX-5] Filter ON + empty list must NEVER be a silent no-op.
+            if (config.chatFilterEnabled && config.targetChats.isEmpty()) {
+                appendSystemInfo(
+                    text = "⚠️ موتور ادامه خودکار: فیلتر چت روشن است ولی لیست چت‌ها خالی است — در تنظیمات → موتور ادامه خودکار اسم چت‌ها را اضافه کن.",
+                    iconKind = "error",
+                )
+                return
             }
-            val attempt = prefs.attemptCount + 1
+            // [FIX-4] Per-session attempt counters.
+            val attempt = prefs.attemptsFor(sid) + 1
             if (attempt > config.maxAttempts) {
                 appendSystemInfo(
                     text = "⛔ موتور ادامه خودکار: حداکثر تلاش‌ها (${config.maxAttempts}) به پایان رسید.",
                     iconKind = "error",
                 )
-                prefs.resetTaskState()
+                prefs.resetTaskState(sid)
                 return
             }
-            prefs.attemptCount = attempt
+            prefs.setAttemptsFor(sid, attempt)
             appendSystemInfo(
                 text = "🔄 موتور ادامه خودکار: تلاش $attempt از ${config.maxAttempts} پس از ${describeInterval(config.intervalSeconds)}…",
                 iconKind = "autorenew",
@@ -5810,9 +5817,10 @@ class ChatViewModel(
             if (!config.enabled) return
             val sid = realSessionId.ifEmpty { sessionId }
             if (sid.isEmpty()) return
-            if (prefs.activeSessionId != sid) return
-            if (prefs.attemptCount >= config.maxAttempts) {
-                prefs.resetTaskState()
+            // [FIX-4] Per-session counters — no single-slot race.
+            val used = prefs.attemptsFor(sid)
+            if (used >= config.maxAttempts) {
+                prefs.resetTaskState(sid)
                 return
             }
             // Chat-name gate applies here too.
@@ -5824,18 +5832,20 @@ class ChatViewModel(
                     if (title.isEmpty() || config.targetChats.none { it.trim().equals(title, ignoreCase = true) }) {
                         return@launch
                     }
-                    prefs.attemptCount = prefs.attemptCount + 1
+                    val attempt = used + 1
+                    prefs.setAttemptsFor(sid, attempt)
                     appendSystemInfo(
-                        text = "🔄 موتور ادامه خودکار: وظیفه‌ی ناتمام پیدا شد — ادامه پس از باز شدن چت (تلاش ${prefs.attemptCount} از ${config.maxAttempts}).",
+                        text = "🔄 موتور ادامه خودکار: وظیفه‌ی ناتمام پیدا شد — ادامه پس از باز شدن چت (تلاش $attempt از ${config.maxAttempts}).",
                         iconKind = "autorenew",
                     )
                     delay(2000) // let the session UI settle before sending
                     sendMessage(config.command, skipContextCheck = true)
                 }
             } else {
-                prefs.attemptCount = prefs.attemptCount + 1
+                val attempt = used + 1
+                prefs.setAttemptsFor(sid, attempt)
                 appendSystemInfo(
-                    text = "🔄 موتور ادامه خودکار: وظیفه‌ی ناتمام پیدا شد — ادامه پس از باز شدن چت (تلاش ${prefs.attemptCount} از ${config.maxAttempts}).",
+                    text = "🔄 موتور ادامه خودکار: وظیفه‌ی ناتمام پیدا شد — ادامه پس از باز شدن چت (تلاش $attempt از ${config.maxAttempts}).",
                     iconKind = "autorenew",
                 )
                 viewModelScope.launch {
@@ -8186,6 +8196,29 @@ class ChatViewModel(
             "browser_use" -> executeBrowserUseTool(argsJson)
             "memory_write" -> executeMemoryWriteTool(argsJson)
             "memory_get" -> executeMemoryGetTool(argsJson)
+            // [T-automation-tools] Automation hub tools (gated by prefs —
+            // absent from the schema when OFF; these branches are the
+            // runtime backstop).
+            com.openminis.app.tools.AutomationTools.TERMUX_RUN ->
+                com.openminis.app.tools.AutomationTools.executeTermuxRun(argsJson, context)
+            com.openminis.app.tools.AutomationTools.ALWAYS_ON_SYNC ->
+                com.openminis.app.tools.AutomationTools.executeAlwaysOnSync(argsJson, context)
+            com.openminis.app.tools.AutomationTools.ALWAYS_ON_RESUME ->
+                com.openminis.app.tools.AutomationTools.executeAlwaysOnResume(argsJson, context)
+            // [T-cross-chat] Cross-chat tools (gated by crossChatEnabled).
+            com.openminis.app.tools.CrossChatTools.CHAT_LIST ->
+                com.openminis.app.tools.CrossChatTools.executeChatList(argsJson, chatRepository, context)
+            com.openminis.app.tools.CrossChatTools.CHAT_READ ->
+                com.openminis.app.tools.CrossChatTools.executeChatRead(argsJson, chatRepository, realSessionId.ifEmpty { sessionId }, context)
+            com.openminis.app.tools.CrossChatTools.CHAT_SEND ->
+                com.openminis.app.tools.CrossChatTools.executeChatSend(
+                    argsJson, chatRepository, realSessionId.ifEmpty { sessionId },
+                    _sessionTitle.value.orEmpty().ifBlank { "چت بدون عنوان" }, context,
+                )
+            com.openminis.app.tools.CrossChatTools.CHAT_CREATE ->
+                com.openminis.app.tools.CrossChatTools.executeChatCreate(argsJson, chatRepository, context)
+            com.openminis.app.tools.CrossChatTools.CHAT_WATCH ->
+                com.openminis.app.tools.CrossChatTools.executeChatWatch(argsJson, chatRepository, realSessionId.ifEmpty { sessionId }, context)
             else -> ToolExecutionResult("Unknown tool: $name", false)
         }
     }
@@ -9252,6 +9285,32 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         val userProfileFragment = try {
             com.openminis.app.data.UserProfileStore.get(context).promptSection()
         } catch (_: Exception) { null }
+        // [FIX-1] Installed CLI agents (Agent Manager) — the AI must KNOW
+        // which agents exist to guide the user. Null when none registered.
+        val agentFragment = try {
+            val agents = com.openminis.app.automation.AgentRegistry.get(context).load()
+            if (agents.isEmpty()) null else buildString {
+                appendLine("Installed CLI agents / tools (managed in Settings → اتوماسیون و ایجنت‌ها → مدیریت ایجنت‌ها):")
+                agents.forEach { a ->
+                    appendLine("- ${a.name}" + (if (a.runCmd.isNotBlank()) " (run: ${a.runCmd.take(80)})" else "") + (if (a.notes.isNotBlank()) " — ${a.notes.take(120)}" else ""))
+                }
+                appendLine("When the user asks about one of these tools, guide them using your own knowledge of the tool (install prerequisites, usage, disk management). Commands execute in this sandbox.")
+            }
+        } catch (_: Exception) { null }
+        // [T-cross-chat] Capability announcement — only when the user enabled it.
+        val crossChatFragment = try {
+            if (com.openminis.app.automation.AutomationPrefs.get(context).crossChatEnabled) {
+                """
+Cross-chat capabilities are ENABLED for this session. You can:
+- list other chats (chat_list)
+- read another chat's history (chat_read)
+- send a message to another chat (chat_send) — the receiving chat will see it attributed to this chat's title
+- create a brand new chat (chat_create)
+- watch another chat for new messages (chat_watch)
+Only invoke these tools when the user explicitly asks you to interact with another chat. Never use chat_send to spam or bypass the user's instruction. Never target the current chat (self-loop guard). Always report back to the user what you did: which chat you contacted, and what happened.
+"""
+            } else null
+        } catch (_: Exception) { null }
 
         return buildString {
             append(base)
@@ -9274,6 +9333,14 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             if (userProfileFragment != null) {
                 append("\n\n")
                 append(userProfileFragment)
+            }
+            if (agentFragment != null) {
+                append("\n\n")
+                append(agentFragment)
+            }
+            if (crossChatFragment != null) {
+                append("\n\n")
+                append(crossChatFragment)
             }
             // Runtime context goes last so the prefix above stays byte-stable
             // across requests within the same day. Keep ordering deterministic

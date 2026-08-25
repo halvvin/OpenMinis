@@ -39,6 +39,8 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Autorenew
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Schedule
@@ -534,6 +536,9 @@ internal fun FallbackInfoBlock(block: AssistantBlock, onRevert: (() -> Unit)? = 
         "compact" -> Icons.Default.CloseFullscreen
         "memory" -> Icons.Default.Psychology
         "thinking" -> Icons.Default.Lightbulb
+        // [FIX-7] Keep Working engine status icons.
+        "autorenew" -> Icons.Default.Autorenew
+        "error" -> Icons.Default.ErrorOutline
         else -> Icons.Default.Info
     }
     // Mirrors iOS systemDividerRow: HStack { Divider, label, Divider }.

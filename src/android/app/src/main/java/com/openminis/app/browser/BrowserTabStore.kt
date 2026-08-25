@@ -111,7 +111,7 @@ class BrowserTabStore private constructor(context: Context) {
     // ── [FIX-3] Async variants — disk I/O off the main thread. A SINGLE-
     // threaded executor keeps write ordering (no interleaved read-modify-
     // write races between rapid navigations). ─────────────────────────────
-    private val writeExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val writeExecutor = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "tabs-writer").apply { isDaemon = true } }
 
     fun upsertAsync(tab: BrowserTab) = writeExecutor.execute { runCatching { upsert(tab) } }
 

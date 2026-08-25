@@ -66,19 +66,29 @@ class KeepWorkingPrefs private constructor(context: Context) {
 
     // ── Per-task runtime state (survives process death) ──────────────────
 
-    /** Session id of the task the engine is currently shepherding, or "". */
-    var activeSessionId: String
-        get() = prefs.getString(KEY_ACTIVE_SESSION, "") ?: ""
-        set(value) = prefs.edit().putString(KEY_ACTIVE_SESSION, value).apply()
+    // [FIX-4] Per-session attempt counters (JSON map) — the old single
+    // activeSessionId slot had a cross-chat race: opening chat B orphaned
+    // chat A's task state. Now every session tracks its own attempts.
+    private val activeSessions: MutableMap<String, Int>
+        get() = runCatching {
+            val o = JSONObject(prefs.getString(KEY_ACTIVE_SESSIONS, "{}") ?: "{}")
+            val out = mutableMapOf<String, Int>()
+            for (k in o.keys()) out[k] = o.optInt(k, 0)
+            out
+        }.getOrDefault(mutableMapOf())
 
-    /** Continuations already fired for the active task. */
-    var attemptCount: Int
-        get() = prefs.getInt(KEY_ATTEMPTS_USED, 0)
-        set(value) = prefs.edit().putInt(KEY_ATTEMPTS_USED, value).apply()
+    fun attemptsFor(sessionId: String): Int = activeSessions[sessionId] ?: 0
 
-    fun resetTaskState() {
-        prefs.edit().putString(KEY_ACTIVE_SESSION, "").putInt(KEY_ATTEMPTS_USED, 0).apply()
+    fun setAttemptsFor(sessionId: String, attempts: Int) {
+        val map = activeSessions.toMutableMap()
+        if (attempts <= 0) map.remove(sessionId) else map[sessionId] = attempts
+        prefs.edit().putString(KEY_ACTIVE_SESSIONS, JSONObject(map).toString()).apply()
     }
+
+    fun resetTaskState(sessionId: String) = setAttemptsFor(sessionId, 0)
+
+    /** Legacy single-slot accessors — kept for migration of old prefs. */
+    @Deprecated("Use attemptsFor/setAttemptsFor")
 
     companion object {
         private const val PREFS_NAME = "keep_working_prefs"
@@ -88,7 +98,7 @@ class KeepWorkingPrefs private constructor(context: Context) {
         private const val KEY_MAX_ATTEMPTS = "kw.max_attempts"
         private const val KEY_CHAT_FILTER = "kw.chat_filter_enabled"
         private const val KEY_TARGET_CHATS = "kw.target_chats"
-        private const val KEY_ACTIVE_SESSION = "kw.active_session"
+        private const val KEY_ACTIVE_SESSIONS = "kw.active_sessions"
         private const val KEY_ATTEMPTS_USED = "kw.attempts_used"
 
         @Volatile private var instance: KeepWorkingPrefs? = null

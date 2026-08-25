@@ -45,15 +45,18 @@ fun AutomationHubScreen(
     onAlwaysOnClick: () -> Unit,
     onTermuxClick: () -> Unit,
     onAgentManagerClick: () -> Unit,
+    onCrossChatToggle: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
     val prefs = remember { AutomationPrefs.get(context) }
     var alwaysOn by remember { mutableStateOf(false) }
     var termux by remember { mutableStateOf(false) }
+    var crossChat by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         alwaysOn = prefs.alwaysOnEnabled
         termux = prefs.termuxEnabled
+        crossChat = prefs.crossChatEnabled
     }
 
     Scaffold(
@@ -88,6 +91,13 @@ fun AutomationHubScreen(
                 enabled = termux,
                 onToggle = { termux = it; prefs.termuxEnabled = it },
                 onClick = onTermuxClick,
+            )
+            AutomationItem(
+                title = "ارتباط بین چت‌ها",
+                subtitle = "اجازه بده چت فعلی چت‌های دیگر را ببیند، پیام بفرستد و بسازد (پیش‌فرض خاموش)",
+                enabled = crossChat,
+                onToggle = { crossChat = it; prefs.crossChatEnabled = it; onCrossChatToggle(it) },
+                onClick = { onCrossChatToggle(!crossChat) },
             )
             AutomationItem(
                 title = "مدیریت ایجنت‌ها",

@@ -47,6 +47,11 @@ class AutomationPrefs private constructor(context: Context) {
         get() = prefs.getBoolean(KEY_REVERSE_API, false)
         set(v) = prefs.edit().putBoolean(KEY_REVERSE_API, v).apply()
 
+    /** [T-cross-chat] Cross-chat communication tools — default OFF. */
+    var crossChatEnabled: Boolean
+        get() = prefs.getBoolean(KEY_CROSS_CHAT, false)
+        set(v) = prefs.edit().putBoolean(KEY_CROSS_CHAT, v).apply()
+
     // ── Floating AI panel geometry (persists across sessions) ────────────
     var floatPanelOpen: Boolean
         get() = prefs.getBoolean(KEY_FP_OPEN, false)
@@ -116,6 +121,7 @@ class AutomationPrefs private constructor(context: Context) {
         private const val KEY_ALWAYS_ON = "auto.alwayson.enabled"
         private const val KEY_TERMUX = "auto.termux.enabled"
         private const val KEY_REVERSE_API = "auto.reverse_api.enabled"
+        private const val KEY_CROSS_CHAT = "auto.cross_chat.enabled"
         private const val KEY_AO_TYPE = "ao.server_type"
         private const val KEY_AO_HOST = "ao.host"
         private const val KEY_AO_PORT = "ao.port"

@@ -84,9 +84,17 @@ object CloudSyncStore {
     private fun get(cfg: Config, path: String): Pair<Boolean, ByteArray> = try {
         val conn = open(cfg, "GET", path)
         val ok = conn.responseCode in 200..299
-        ok to (conn.inputStream.use { it.readBytes() })
+        ok to (if (ok) conn.inputStream.use { it.readBytes() } else ByteArray(0))
     } catch (e: Exception) {
         false to ByteArray(0)
+    }
+
+    private fun getWithCode(cfg: Config, path: String): Triple<Int, ByteArray, String> = try {
+        val conn = open(cfg, "GET", path)
+        val code = conn.responseCode
+        Triple(code, if (code in 200..299) conn.inputStream.use { it.readBytes() } else ByteArray(0), "HTTP $code")
+    } catch (e: Exception) {
+        Triple(0, ByteArray(0), e.message ?: "خطای اتصال")
     }
 
     // ── High-level sync ──────────────────────────────────────────────────
@@ -95,6 +103,11 @@ object CloudSyncStore {
         if (cfg.baseUrl.isBlank()) return SyncResult(false, "آدرس WebDAV تنظیم نشده")
         val results = mutableListOf<SyncResult>()
 
+        // [FIX-9] Push in dependency order: soul → profile → keep_working → agents → skills.
+        runCatching {
+            val soul = File(context.filesDir, "minis-global/memory/SOUL.md")
+            if (soul.exists()) results += put(cfg, "soul.md", soul.readBytes())
+        }
         UserProfileStore.get(context).load().let {
             results += put(cfg, "user_profile.json", it.toJson().toByteArray())
         }
@@ -113,10 +126,6 @@ object CloudSyncStore {
             if (agents.exists()) results += put(cfg, "agents.json", agents.readBytes())
         }
         runCatching {
-            val soul = File(context.filesDir, "minis-global/memory/SOUL.md")
-            if (soul.exists()) results += put(cfg, "soul.md", soul.readBytes())
-        }
-        runCatching {
             val skillsDir = File(context.filesDir, "minis-global/skills")
             if (skillsDir.isDirectory) {
                 results += put(cfg, "skills.zip", zipDir(skillsDir))
@@ -130,9 +139,19 @@ object CloudSyncStore {
         }
     }
 
+    // [FIX-9] Dependency order: soul → profile → keep_working → agents → skills.
+    private val PULL_ORDER = listOf("soul.md", "user_profile.json", "keep_working.json", "agents.json", "skills.zip")
+
     fun pullAll(context: Context, cfg: Config): SyncResult {
         if (cfg.baseUrl.isBlank()) return SyncResult(false, "آدرس WebDAV تنظیم نشده")
         val results = mutableListOf<SyncResult>()
+
+        // [FIX-8] Probe the root first — a 5xx here means SERVER trouble, and
+        // the user must see that instead of a misleading "no files".
+        val (probeCode, _, probeMsg) = getWithCode(cfg, "")
+        if (probeCode >= 500) {
+            return SyncResult(false, "❌ خطای سرور ($probeMsg) — سرور WebDAV مشکل دارد، نه تنظیمات تو.")
+        }
 
         get(cfg, "user_profile.json").takeIf { it.first }?.let { (_, bytes) ->
             runCatching { UserProfileStore.get(context).save(UserProfile.fromJson(String(bytes))) }
@@ -175,6 +194,13 @@ object CloudSyncStore {
                 unzipTo(bytes, skillsDir)
             }.onSuccess { results += SyncResult(true, "skills") }
         }
+
+        // [FIX-8] Report per-artifact server errors instead of silence.
+        val serverErrors = PULL_ORDER.mapNotNull { path ->
+            val (code, _, msg) = getWithCode(cfg, path)
+            if (code >= 500) "$path → $msg" else null
+        }
+        serverErrors.forEach { results += SyncResult(false, it) }
 
         return if (results.isEmpty()) {
             SyncResult(false, "هیچ فایلی روی سرور پیدا نشد")

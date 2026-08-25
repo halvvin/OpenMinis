@@ -27,6 +27,12 @@ object AgentTools {
         // attempt those calls. Mirrors the iOS gate at
         // AIChatViewModel.makeAgentTools(memoryEnabled:).
         memoryEnabled: Boolean = true,
+        // [T-automation-tools] Automation-hub gates — OFF ⇒ tool absent
+        // from the schema entirely (model can't even attempt it).
+        termuxEnabled: Boolean = false,
+        alwaysOnEnabled: Boolean = false,
+        // [T-cross-chat] Cross-chat communication — OFF by default.
+        crossChatEnabled: Boolean = false,
     ): List<AgentToolDefinition> = buildList {
         add(shellExecuteDefinition())
         add(FileReadTool.definition())
@@ -39,6 +45,18 @@ object AgentTools {
         if (memoryEnabled) {
             add(memoryWriteDefinition())
             add(memoryGetDefinition())
+        }
+        if (termuxEnabled) add(AutomationTools.termuxRunDefinition())
+        if (alwaysOnEnabled) {
+            add(AutomationTools.alwaysOnSyncDefinition())
+            add(AutomationTools.alwaysOnResumeDefinition())
+        }
+        if (crossChatEnabled) {
+            add(CrossChatTools.chatListDefinition())
+            add(CrossChatTools.chatReadDefinition())
+            add(CrossChatTools.chatSendDefinition())
+            add(CrossChatTools.chatCreateDefinition())
+            add(CrossChatTools.chatWatchDefinition())
         }
     }
 
