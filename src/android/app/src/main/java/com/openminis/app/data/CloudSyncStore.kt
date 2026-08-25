@@ -142,9 +142,6 @@ object CloudSyncStore {
     // [FIX-9] Dependency order: soul → profile → keep_working → agents → skills.
     private val PULL_ORDER = listOf("soul.md", "user_profile.json", "keep_working.json", "agents.json", "skills.zip")
 
-    // ── Pull: ordered by dependency (soul → profile → keep_working → agents → skills) ──
-    private val PULL_ORDER = listOf("soul.md", "user_profile.json", "keep_working.json", "agents.json", "skills.zip")
-
     fun pullAll(context: Context, cfg: Config): SyncResult {
         if (cfg.baseUrl.isBlank()) return SyncResult(false, "آدرس WebDAV تنظیم نشده")
         val results = mutableListOf<SyncResult>()
