@@ -56,6 +56,12 @@ sleep 15
 adb exec-out screencap -p > artifacts/03-browser-loaded.png
 adb shell uiautomator dump /sdcard/ui_loaded.xml >/dev/null 2>&1 || true
 adb pull /sdcard/ui_loaded.xml artifacts/ui_loaded.xml >/dev/null 2>&1 || true
+# Navigation proof: example.com's real page title must appear in the UI tree.
+if grep -q "Example Domain" artifacts/ui_loaded.xml 2>/dev/null; then
+  echo "PASS: page title visible" > artifacts/nav_check.txt
+else
+  echo "FAIL: page title NOT found in UI dump" > artifacts/nav_check.txt
+fi
 
 echo "=== DEEP LINK: keep working settings ==="
 adb shell am start -a android.intent.action.VIEW -d "minis://settings/keep-working"

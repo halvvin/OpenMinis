@@ -345,6 +345,18 @@ fun BrowserScreen(onBack: () -> Unit) {
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                 ) {
                     Column {
+                        // ── Omnibox navigation (shared by Go button + Enter) ──
+                        fun navigate() {
+                            var u = urlInput.trim()
+                            if (u.isEmpty()) return
+                            if (!u.startsWith("http://") && !u.startsWith("https://")) {
+                                u = if (u.contains(".") && !u.contains(" ")) "https://$u"
+                                else "https://duckduckgo.com/?q=" + java.net.URLEncoder.encode(u, "UTF-8")
+                            }
+                            urlInput = u
+                            updateTab(active.id) { it.copy(url = u) }
+                            webViewPool[active.id]?.loadUrl(u)
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -366,9 +378,20 @@ fun BrowserScreen(onBack: () -> Unit) {
                                 placeholder = { Text("جستجو یا آدرس…", style = MaterialTheme.typography.bodySmall) },
                                 textStyle = MaterialTheme.typography.bodySmall,
                                 shape = RoundedCornerShape(20.dp),
+                                // [T-omnibox-enter] Keyboard Enter now navigates —
+                                // the smoke test caught that Enter did nothing.
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Go,
+                                ),
+                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                    onGo = { navigate() },
+                                ),
                             )
                             IconButton(onClick = { webViewPool[active.id]?.reload() }) {
                                 Icon(Icons.Filled.Refresh, contentDescription = "بارگذاری مجدد")
+                            }
+                            IconButton(onClick = { navigate() }) {
+                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "برو")
                             }
                             IconButton(onClick = {
                                 // Bookmark = save to tab title as ★ prefix (lightweight).
