@@ -56,6 +56,13 @@ jobs:
             test -n "$APK"
 
             echo "=== INSTALL ==="
+            # Wait for FULL emulator boot before installing (device-offline fix).
+            adb wait-for-device
+            for i in $(seq 1 60); do
+              BOOT=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+              if [ "$BOOT" = "1" ]; then echo "boot completed after ${i}x5s"; break; fi
+              sleep 5
+            done
             adb install -r "$APK"
 
             echo "=== LAUNCH (main / session list) ==="
