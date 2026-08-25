@@ -558,8 +558,8 @@ fun BrowserScreen(onBack: () -> Unit) {
                                     // page stayed white. Compare against about:blank
                                     // explicitly and load the tab's stored URL.
                                     val cur = url
-                                    if ((cur.isNullOrBlank() || cur == "about:blank") && tab.url.isNotBlank()) {
-                                        loadUrl(tab.url)
+                                    if ((cur.isNullOrBlank() || cur == "about:blank") && active.url.isNotBlank()) {
+                                        loadUrl(active.url)
                                     }
                                 }
                             },
@@ -655,6 +655,7 @@ private fun FloatingAiPanel(
     getWebView: () -> WebView?,
 ) {
     val context = LocalContext.current
+    val autoPrefs = remember { AutomationPrefs.get(context) }
     var offsetX by remember { mutableStateOf(autoPrefs.floatPanelX) }
     var offsetY by remember { mutableStateOf(autoPrefs.floatPanelY) }
     var panelW by remember { mutableStateOf(autoPrefs.floatPanelW) }
