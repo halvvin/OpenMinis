@@ -91,6 +91,7 @@ fun TerminalScreen(
     val inputController = rememberTerminalInputController()
     val scope = rememberCoroutineScope()
     var ctrlActive by remember { mutableStateOf(false) }
+    var altActive by remember { mutableStateOf(false) }
 
     // Pipe PTY output → emulator.
     LaunchedEffect(terminalSession) {
@@ -211,6 +212,12 @@ fun TerminalScreen(
                                 return@TerminalInputView
                             }
                         }
+                        if (altActive && bytes.size == 1) {
+                            // Alt+x → ESC x (standard terminal meta prefix).
+                            terminalSession.sendRawBytes(byteArrayOf(0x1B) + bytes)
+                            altActive = false
+                            return@TerminalInputView
+                        }
                         terminalSession.sendRawBytes(bytes)
                     },
                     applicationCursorKeys = emulator.applicationCursorKeys,
@@ -259,8 +266,10 @@ fun TerminalScreen(
         ) {
             KeyboardAccessoryBar(
                 ctrlActive = ctrlActive,
+                altActive = altActive,
                 keyboardVisible = inputController.isFocused,
                 onCtrlToggle = { ctrlActive = !ctrlActive },
+                onAltToggle = { altActive = !altActive },
                 onToggleKeyboard = {
                     if (inputController.isFocused) inputController.clearFocus()
                     else inputController.requestFocus()
@@ -364,8 +373,10 @@ private fun CircularIconButton(
 @Composable
 private fun KeyboardAccessoryBar(
     ctrlActive: Boolean,
+    altActive: Boolean,
     keyboardVisible: Boolean,
     onCtrlToggle: () -> Unit,
+    onAltToggle: () -> Unit,
     onToggleKeyboard: () -> Unit,
     onSendRaw: (ByteArray) -> Unit,
     onArrow: (Char) -> Unit,
@@ -399,6 +410,7 @@ private fun KeyboardAccessoryBar(
         // Placed right after Tab, mirroring iOS fa3d2f8c.
         QuickCommandButton("⏎", iconText = "⏎") { onSendRaw(byteArrayOf(0x0D)) }
         QuickCommandButton("Ctrl", iconText = "^", isActive = ctrlActive, onClick = onCtrlToggle)
+        QuickCommandButton("Alt", iconText = "⌥", isActive = altActive, onClick = onAltToggle)
         QuickCommandButton("\u2191", icon = Icons.Default.KeyboardArrowUp) { onArrow('A') }
         QuickCommandButton("\u2193", icon = Icons.Default.KeyboardArrowDown) { onArrow('B') }
         QuickCommandButton("\u2190", icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft) { onArrow('D') }
@@ -406,6 +418,21 @@ private fun KeyboardAccessoryBar(
         QuickCommandButton("C-c", icon = Icons.Outlined.Cancel) { onSendRaw(byteArrayOf(0x03)) }
         QuickCommandButton("C-d", icon = Icons.Default.Eject) { onSendRaw(byteArrayOf(0x04)) }
         QuickCommandButton("C-z", icon = Icons.Outlined.PauseCircle) { onSendRaw(byteArrayOf(0x1A)) }
+        // [T-term-chars] Common shell characters — second row so the terminal
+        // keyboard is complete (spec §2-2: / ~ - | > < & * . _ " ' $).
+        QuickCommandButton("/", iconText = "/") { onSendRaw("/".toByteArray()) }
+        QuickCommandButton("~", iconText = "~") { onSendRaw("~".toByteArray()) }
+        QuickCommandButton("-", iconText = "-") { onSendRaw("-".toByteArray()) }
+        QuickCommandButton("|", iconText = "|") { onSendRaw("|".toByteArray()) }
+        QuickCommandButton(">", iconText = ">") { onSendRaw(">".toByteArray()) }
+        QuickCommandButton("<", iconText = "<") { onSendRaw("<".toByteArray()) }
+        QuickCommandButton("&", iconText = "&") { onSendRaw("&".toByteArray()) }
+        QuickCommandButton("*", iconText = "*") { onSendRaw("*".toByteArray()) }
+        QuickCommandButton(".", iconText = ".") { onSendRaw(".".toByteArray()) }
+        QuickCommandButton("_", iconText = "_") { onSendRaw("_".toByteArray()) }
+        QuickCommandButton("\"", iconText = "\"") { onSendRaw("\"".toByteArray()) }
+        QuickCommandButton("'", iconText = "'") { onSendRaw("'".toByteArray()) }
+        QuickCommandButton("$", iconText = "$") { onSendRaw("$".toByteArray()) }
         }
     }
 }
