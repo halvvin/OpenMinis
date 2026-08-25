@@ -47,6 +47,23 @@ class AutomationPrefs private constructor(context: Context) {
         get() = prefs.getBoolean(KEY_REVERSE_API, false)
         set(v) = prefs.edit().putBoolean(KEY_REVERSE_API, v).apply()
 
+    // ── Floating AI panel geometry (persists across sessions) ────────────
+    var floatPanelOpen: Boolean
+        get() = prefs.getBoolean(KEY_FP_OPEN, false)
+        set(v) = prefs.edit().putBoolean(KEY_FP_OPEN, v).apply()
+    var floatPanelX: Float
+        get() = prefs.getFloat(KEY_FP_X, 0f)
+        set(v) = prefs.edit().putFloat(KEY_FP_X, v).apply()
+    var floatPanelY: Float
+        get() = prefs.getFloat(KEY_FP_Y, 250f)
+        set(v) = prefs.edit().putFloat(KEY_FP_Y, v).apply()
+    var floatPanelW: Int
+        get() = prefs.getInt(KEY_FP_W, 300)
+        set(v) = prefs.edit().putInt(KEY_FP_W, v).apply()
+    var floatPanelH: Int
+        get() = prefs.getInt(KEY_FP_H, 380)
+        set(v) = prefs.edit().putInt(KEY_FP_H, v).apply()
+
     // ── Always-On server config ──────────────────────────────────────────
     fun loadAlwaysOn(): AlwaysOnConfig = AlwaysOnConfig(
         serverType = prefs.getString(KEY_AO_TYPE, "vps") ?: "vps",
@@ -108,6 +125,11 @@ class AutomationPrefs private constructor(context: Context) {
         private const val KEY_TX_DIR = "tx.exchange_dir"
         private const val KEY_TX_API = "tx.use_api"
         private const val KEY_AO_LOG = "ao.log"
+        private const val KEY_FP_OPEN = "fp.open"
+        private const val KEY_FP_X = "fp.x"
+        private const val KEY_FP_Y = "fp.y"
+        private const val KEY_FP_W = "fp.w"
+        private const val KEY_FP_H = "fp.h"
 
         @Volatile private var instance: AutomationPrefs? = null
 

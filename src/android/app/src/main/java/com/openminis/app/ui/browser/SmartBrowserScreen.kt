@@ -129,6 +129,7 @@ fun BrowserScreen(onBack: () -> Unit) {
     val tabs = remember { mutableStateListOf<BrowserTab>().apply { addAll(store.load()) } }
     var activeId by remember { mutableStateOf(tabs.firstOrNull()?.id.orEmpty()) }
     var reverseApiOn by remember { mutableStateOf(autoPrefs.reverseApiEnabled) }
+    var aiPanelOpen by remember { mutableStateOf(autoPrefs.floatPanelOpen) }
 
     // Per-tab in-memory state
     val webViewPool = remember { LinkedHashMap<String, WebView>() }
@@ -451,6 +452,16 @@ fun BrowserScreen(onBack: () -> Unit) {
                                 style = MaterialTheme.typography.titleMedium,
                             )
                         }
+                        // [T-float-summon] Persistent entry point for the AI panel —
+                        // collapsing it can never orphan the user.
+                        Text(
+                            "🤖",
+                            modifier = Modifier
+                                .size(34.dp)
+                                .clickable { autoPrefs.floatPanelOpen = true }
+                                .padding(6.dp),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
                     }
                 }
 
@@ -541,7 +552,15 @@ fun BrowserScreen(onBack: () -> Unit) {
                                             progress = newProgress
                                         }
                                     }
-                                    if (url.isNullOrBlank()) loadUrl(tab_url(active))
+                                    // [T-blank-page-fix] A pooled/recreated WebView's
+                                    // getUrl() is "about:blank" — NOT blank — so the
+                                    // old isNullOrBlank() check never fired and the
+                                    // page stayed white. Compare against about:blank
+                                    // explicitly and load the tab's stored URL.
+                                    val cur = url
+                                    if ((cur.isNullOrBlank() || cur == "about:blank") && tab.url.isNotBlank()) {
+                                        loadUrl(tab.url)
+                                    }
                                 }
                             },
                             onRelease = { /* pooled */ },
@@ -550,6 +569,8 @@ fun BrowserScreen(onBack: () -> Unit) {
 
                     // ── 5) Floating AI panel (draggable, collapsible) ────
                     FloatingAiPanel(
+                        open = aiPanelOpen,
+                        onOpenChange = { aiPanelOpen = it; autoPrefs.floatPanelOpen = it },
                         tab = active,
                         store = store,
                         providerRepo = providerRepo,
@@ -623,6 +644,8 @@ private fun tab_url(tab: BrowserTab): String = tab.url
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FloatingAiPanel(
+    open: Boolean,
+    onOpenChange: (Boolean) -> Unit,
     tab: BrowserTab,
     store: BrowserTabStore,
     providerRepo: ProviderRepository,
@@ -631,13 +654,22 @@ private fun FloatingAiPanel(
     onMessagesChanged: () -> Unit,
     getWebView: () -> WebView?,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    var offsetX by remember { mutableStateOf(0f) }
-    var offsetY by remember { mutableStateOf(250f) }
+    val context = LocalContext.current
+    var offsetX by remember { mutableStateOf(autoPrefs.floatPanelX) }
+    var offsetY by remember { mutableStateOf(autoPrefs.floatPanelY) }
+    var panelW by remember { mutableStateOf(autoPrefs.floatPanelW) }
+    var panelH by remember { mutableStateOf(autoPrefs.floatPanelH) }
     var input by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
 
-    if (!expanded) {
+    fun saveGeom() {
+        autoPrefs.floatPanelX = offsetX
+        autoPrefs.floatPanelY = offsetY
+        autoPrefs.floatPanelW = panelW
+        autoPrefs.floatPanelH = panelH
+    }
+
+    if (!open) {
         // Collapsed bubble — tap to open, drag to move.
         Box(modifier = Modifier.fillMaxSize()) {
             Box(
@@ -648,11 +680,13 @@ private fun FloatingAiPanel(
                     .background(MaterialTheme.colorScheme.primary, CircleShape)
                     .border(2.dp, MaterialTheme.colorScheme.surface, CircleShape)
                     .combinedClickable(
-                        onClick = { expanded = true },
-                        onLongClick = { expanded = true },
+                        onClick = { onOpenChange(true) },
+                        onLongClick = { onOpenChange(true) },
                     )
                     .pointerInput(Unit) {
-                        detectDragGestures { change, drag ->
+                        detectDragGestures(
+                            onDragEnd = { saveGeom() },
+                        ) { change, drag ->
                             change.consume()
                             offsetX += drag.x
                             offsetY += drag.y
@@ -671,8 +705,8 @@ private fun FloatingAiPanel(
         modifier = Modifier
             .align(Alignment.TopEnd)
             .offset { IntOffset(offsetX.toInt(), offsetY.toInt()) }
-            .width(300.dp)
-            .height(380.dp)
+            .width(panelW.dp)
+            .height(panelH.dp)
             .imePadding(),
         shape = RoundedCornerShape(14.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
@@ -682,16 +716,35 @@ private fun FloatingAiPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragEnd = { saveGeom() },
+                        ) { change, drag ->
+                            change.consume()
+                            offsetX += drag.x
+                            offsetY += drag.y
+                        }
+                    }
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("🤖 $modelTitle", style = MaterialTheme.typography.labelLarge, maxLines = 1)
+                Text("🤖 $modelTitle ⠿", style = MaterialTheme.typography.labelLarge, maxLines = 1)
                 Row {
+                    Text("－", modifier = Modifier.clickable {
+                        panelW = (panelW - 40).coerceAtLeast(220)
+                        panelH = (panelH - 40).coerceAtLeast(240)
+                        saveGeom()
+                    }, style = MaterialTheme.typography.titleMedium)
+                    Text("＋", modifier = Modifier.clickable {
+                        panelW = (panelW + 40).coerceAtMost(520)
+                        panelH = (panelH + 40).coerceAtMost(760)
+                        saveGeom()
+                    }, style = MaterialTheme.typography.titleMedium)
                     Icon(
                         Icons.Filled.Close,
                         contentDescription = "جمع کردن",
-                        modifier = Modifier.size(18.dp).clickable { expanded = false },
+                        modifier = Modifier.size(18.dp).clickable { onOpenChange(false) },
                     )
                 }
             }
