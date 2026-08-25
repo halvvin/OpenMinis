@@ -219,6 +219,17 @@ object DeepLinkHandler {
                     DeepLinkAction.OpenSettingsScreen(Routes.ENV_VARS)
                 }
             }
+            // [T-new-sections-deeplink] Routes for the fork's new sections —
+            // also lets the emulator smoke-test deep-link straight into them.
+            "smart-browser", "smart_browser", "browser" ->
+                DeepLinkAction.OpenSettingsScreen(Routes.BROWSER)
+            "automation" -> DeepLinkAction.OpenSettingsScreen(Routes.AUTOMATION)
+            "automation-alwayson", "alwayson" -> DeepLinkAction.OpenSettingsScreen(Routes.ALWAYS_ON)
+            "automation-termux", "termux" -> DeepLinkAction.OpenSettingsScreen(Routes.TERMUX)
+            "agents", "agent-manager" -> DeepLinkAction.OpenSettingsScreen(Routes.AGENT_MANAGER)
+            "user-profile", "profile" -> DeepLinkAction.OpenSettingsScreen(Routes.USER_PROFILE)
+            "keep-working", "keep_working" -> DeepLinkAction.OpenSettingsScreen(Routes.KEEP_WORKING)
+            "cloud-sync", "cloud_sync" -> DeepLinkAction.OpenSettingsScreen(Routes.CLOUD_SYNC)
             // Unknown path — land on Settings home rather than failing,
             // so the user can find what they wanted by browsing.
             else -> DeepLinkAction.OpenSettingsScreen(Routes.SETTINGS)

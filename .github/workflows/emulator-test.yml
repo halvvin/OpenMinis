@@ -1,0 +1,110 @@
+name: Emulator Smoke Test
+
+# Real on-emulator verification: install the APK, launch the app, walk the
+# new sections via deep links, capture screenshots + UI dumps + logcat.
+# Artifacts are pulled back and reviewed visually.
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ main ]
+
+jobs:
+  emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Prepare sandbox assets (Alpine rootfs + proot)
+        run: |
+          chmod +x scripts/prepare_android_sandbox.sh
+          ./scripts/prepare_android_sandbox.sh
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x src/android/gradlew
+
+      - name: Build debug APK
+        working-directory: src/android
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
+
+      - name: Run emulator smoke tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          script: |
+            set -x
+            mkdir -p artifacts
+            APK=$(ls src/android/app/build/outputs/apk/debug/*.apk | head -1)
+
+            echo "=== INSTALL ==="
+            adb install -r "$APK"
+
+            echo "=== LAUNCH (main / session list) ==="
+            adb shell am start -n com.openminis.app.fork/com.openminis.app.MainActivity
+            sleep 25
+            adb shell "pidof com.openminis.app.fork" > artifacts/pid_main.txt || true
+            adb exec-out screencap -p > artifacts/01-main.png
+            adb shell uiautomator dump /sdcard/ui_main.xml >/dev/null 2>&1 || true
+            adb pull /sdcard/ui_main.xml artifacts/ui_main.xml >/dev/null 2>&1 || true
+
+            echo "=== DEEP LINK: smart browser ==="
+            adb shell am start -a android.intent.action.VIEW -d "minis://settings/smart-browser"
+            sleep 15
+            adb shell "pidof com.openminis.app.fork" > artifacts/pid_browser.txt || true
+            adb exec-out screencap -p > artifacts/02-browser.png
+            adb shell uiautomator dump /sdcard/ui_browser.xml >/dev/null 2>&1 || true
+            adb pull /sdcard/ui_browser.xml artifacts/ui_browser.xml >/dev/null 2>&1 || true
+
+            echo "=== BROWSER: type URL + go (UIAutomator input) ==="
+            # Tap the omnibox (roughly mid-upper screen) and type a URL.
+            adb shell input tap 540 420
+            sleep 2
+            adb shell input text "example.com"
+            sleep 1
+            adb shell input keyevent 66   # ENTER
+            sleep 12
+            adb exec-out screencap -p > artifacts/03-browser-loaded.png
+
+            echo "=== DEEP LINK: keep working settings ==="
+            adb shell am start -a android.intent.action.VIEW -d "minis://settings/keep-working"
+            sleep 8
+            adb exec-out screencap -p > artifacts/04-keepworking.png
+
+            echo "=== DEEP LINK: termux settings ==="
+            adb shell am start -a android.intent.action.VIEW -d "minis://settings/termux"
+            sleep 8
+            adb exec-out screencap -p > artifacts/05-termux.png
+
+            echo "=== DEEP LINK: user profile ==="
+            adb shell am start -a android.intent.action.VIEW -d "minis://settings/profile"
+            sleep 8
+            adb exec-out screencap -p > artifacts/06-profile.png
+
+            echo "=== CRASH CHECK ==="
+            adb logcat -d > artifacts/logcat.txt || true
+            grep -c "FATAL EXCEPTION" artifacts/logcat.txt > artifacts/fatal_count.txt || echo 0 > artifacts/fatal_count.txt
+            grep "FATAL EXCEPTION" artifacts/logcat.txt | head -5 > artifacts/fatal_sample.txt || true
+
+            echo "=== DONE ==="
+            ls -la artifacts/
+
+      - name: Upload smoke-test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: emulator-smoke-artifacts
+          path: artifacts/
+          if-no-files-found: warn
