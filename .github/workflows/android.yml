@@ -61,13 +61,24 @@ jobs:
       # ("App not installed" when installing over the previous version).
       # The keystore is decoded into src/android/keystore/ and build.gradle.kts
       # explicitly signs with it (env-based default paths proved unreliable).
-      - name: Restore stable debug keystore
+      - name: Restore stable debug keystore (validated)
         run: |
           if [ -n "$ANDROID_DEBUG_KEYSTORE_B64" ]; then
             mkdir -p keystore
             echo "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > keystore/debug.keystore
             chmod 600 keystore/debug.keystore
             echo "keystore restored: $(wc -c < keystore/debug.keystore) bytes"
+            # [T-signature-fix] A CORRUPT/invalid keystore here previously
+            # produced an UNSIGNED APK (padding-only signing block) that
+            # Android refuses with "App not installed". Validate with
+            # keytool; on failure DELETE the file so gradle falls back to
+            # the default debug key — a signed APK beats a stable one.
+            if ! keytool -list -keystore keystore/debug.keystore -storepass android >/dev/null 2>&1; then
+              echo "::warning::decoded keystore is INVALID — falling back to default debug key"
+              rm -f keystore/debug.keystore
+            else
+              echo "keystore is valid ✓"
+            fi
           else
             echo "WARNING: ANDROID_DEBUG_KEYSTORE_B64 secret missing — build will use a fresh debug key"
           fi
@@ -76,6 +87,13 @@ jobs:
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --stacktrace --no-daemon
+
+      - name: Verify APK signature (fail build if unsigned)
+        run: |
+          APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify "$APK"
+          echo "signature verified ✓ on $APK"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
