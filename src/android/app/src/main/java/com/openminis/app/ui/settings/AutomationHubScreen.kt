@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -115,7 +116,12 @@ fun AutomationHubScreen(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    listOf(0 to "خاموش", 1 to "فقط خواندن", 2 to "خواندن + نوشتن").forEach { (mode, label) ->
+                    // [FIX-635434b] listOf().forEach { Composable() } is illegal —
+                    // forEach is a regular lambda, not @Composable. Iterate with
+                    // an indexed for-loop so each TextButton call sits in the
+                    // surrounding Composable scope.
+                    val options = listOf(0 to "خاموش", 1 to "فقط خواندن", 2 to "خواندن + نوشتن")
+                    for ((mode, label) in options) {
                         TextButton(
                             onClick = { setCrossChatMode(mode) },
                             colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
