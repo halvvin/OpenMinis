@@ -56,6 +56,8 @@ import com.openminis.app.ui.settings.SystemPermissionsScreen
 import com.openminis.app.ui.settings.SessionStorageDetailScreen
 import com.openminis.app.ui.settings.SkillDetailScreen
 import com.openminis.app.ui.settings.StorageManagementScreen
+import com.openminis.app.ui.settings.StorageCleanupScreen
+import com.openminis.app.ui.settings.RootfsSwitchScreen
 import com.openminis.app.ui.settings.SkillFileViewerScreen
 import com.openminis.app.ui.settings.UsageStatsScreen
 import com.openminis.app.ui.settings.MinisSkillsBrowserScreen
@@ -109,6 +111,8 @@ object Routes {
     const val MODEL_ENTRY_DETAIL = "model_entry/{instanceId}/{entryId}"
     const val ADD_CUSTOM_MODEL = "add_custom_model/{instanceId}"
     const val STORAGE = "storage"
+    const val STORAGE_CLEANUP = "storage_cleanup"
+    const val ROOTFS_SWITCH = "rootfs_switch"
     const val SESSION_STORAGE_DETAIL = "session_storage/{sessionId}"
     const val ROOTFS_MANAGEMENT = "rootfs_management"
     const val MIRROR_CATEGORY_DETAIL = "mirror_category/{categoryKey}"
@@ -869,7 +873,16 @@ fun AppNavigation(
                 onSessionClick = { sessionId ->
                     navController.safeNavigate(Routes.sessionStorageDetail(sessionId))
                 },
+                onCleanupClick = { navController.safeNavigate(Routes.STORAGE_CLEANUP) },
+                onRootfsSwitchClick = { navController.safeNavigate(Routes.ROOTFS_SWITCH) },
             )
+        }
+
+        composable(Routes.STORAGE_CLEANUP) {
+            StorageCleanupScreen(chatDao = chatRepository.dao, onBack = { navController.safePopBackStack() })
+        }
+        composable(Routes.ROOTFS_SWITCH) {
+            RootfsSwitchScreen(onBack = { navController.safePopBackStack() })
         }
 
         composable(

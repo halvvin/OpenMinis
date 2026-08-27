@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MovieCreation
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Visibility
@@ -555,6 +556,44 @@ fun ProviderDetailScreen(
                     )
                 },
                 showDivider = entries.isNotEmpty() || true,
+            )
+
+            // Bulk-test row (T-user-batch-1): per-API bulk test results.
+            var bulkTestRunning by remember { mutableStateOf(false) }
+            var bulkTestSummary by remember { mutableStateOf<String?>(null) }
+            SettingsRow(
+                title = if (bulkTestRunning) "Testing all models…" else "Test all models",
+                subtitle = bulkTestSummary,
+                onClick = if (bulkTestRunning || entries.isEmpty()) {
+                    null
+                } else {
+                    {
+                        bulkTestRunning = true
+                        scope.launch {
+                            var ok = 0
+                            var fail = 0
+                            for (entry in entries) {
+                                try {
+                                    val result = providerRepository.testModelEntry(instance, entry)
+                                    if (result) ok++ else fail++
+                                } catch (_: Exception) {
+                                    fail++
+                                }
+                            }
+                            bulkTestRunning = false
+                            bulkTestSummary = "$ok OK / $fail failed"
+                        }
+                    }
+                },
+                showChevron = false,
+                trailing = {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                },
+                showDivider = true,
             )
 
             entries.forEachIndexed { idx, entry ->

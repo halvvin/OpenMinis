@@ -928,6 +928,16 @@
     <string name="skills_browser_error_invalid">Invalid SKILL.md or already exists</string>
     <string name="skills_browser_error_format">Invalid SKILL.md content</string>
     <string name="storage_title">Storage</string>
+    <string name="storage_section_actions">Maintenance</string>
+    <string name="storage_cleanup_button">Bulk cleanup (choose items)</string>
+    <string name="storage_rootfs_switch">Move rootfs location</string>
+    <string name="storage_cleanup_title">Cleanup Storage</string>
+    <string name="storage_cleanup_section">Select sessions to delete</string>
+    <string name="storage_cleanup_delete_selected">Delete selected</string>
+    <string name="storage_cleanup_confirm_title">Confirm deletion</string>
+    <string name="storage_cleanup_confirm_message">Delete %1$d session(s) (%2$s)? This cannot be undone.</string>
+    <string name="storage_untitled">Untitled</string>
+    <string name="common_confirm">Confirm</string>
     <string name="storage_section_overview">Overview</string>
     <string name="storage_overview_shell">Shell Container</string>
     <string name="storage_overview_database">Chat Database</string>

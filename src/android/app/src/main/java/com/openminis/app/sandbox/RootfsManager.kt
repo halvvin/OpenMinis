@@ -39,7 +39,36 @@ sealed class RootfsInstallState {
  */
 class RootfsManager private constructor(private val context: Context) {
 
-    val rootfsDir: File = File(context.filesDir, "alpine-rootfs")
+    // [T-user-batch-1] Rootfs location preference. When "external" is chosen the
+    // rootfs lives in getExternalFilesDir("alpine-rootfs") instead of internal
+    // filesDir. The getter resolves DYNAMICALLY on every access so that:
+    //  1. after a successful move, every consumer (PRootKernel, tools, storage
+    //     screens) automatically sees the new location with no restart dance;
+    //  2. if the SD card is removed while external is preferred, we silently
+    //     fall back to the internal path — the app never crashes and never
+    //     points at a dead directory (it just finds the rootfs missing there,
+    //     which isInstalled reports, and install/move can restore it).
+    private val locationPrefs =
+        context.getSharedPreferences("rootfs_location", Context.MODE_PRIVATE)
+
+    val rootfsDir: File
+        get() {
+            if (locationPrefs.getBoolean("use_external", false)) {
+                val ext = context.getExternalFilesDir(null)
+                if (ext != null && ext.exists()) return File(ext, "alpine-rootfs")
+                // External volume unavailable → fall back to internal.
+            }
+            return File(context.filesDir, "alpine-rootfs")
+        }
+    /**
+     * Preferred external location for rootfs when user selects "External".
+     * Uses getExternalFilesDir("rootfs") – this directory lives on the
+     * primary external storage (SD card if present, otherwise internal
+     * emulated storage). The path is guaranteed to exist when the
+     * permission WRITE_EXTERNAL_STORAGE (API <29) or scoped storage
+     * (API ≥29) is granted.
+     */
+    private val externalRootfsDir: File? get() = context.getExternalFilesDir(null)?.let { File(it, "alpine-rootfs") }
     val prootBinary: File = File(context.applicationInfo.nativeLibraryDir, "libproot.so")
 
     private val archFile: File get() = File(rootfsDir, ".arch")
@@ -65,6 +94,56 @@ class RootfsManager private constructor(private val context: Context) {
      * Progress is published to [installState] (Preparing → Extracting(f) →
      * Finalizing → Installed / Failed).
      */
+    /**
+     * Move rootfs to the chosen destination (internal or external).
+     * Atomic: copy to a staging dir in the target volume, verify byte-size,
+     * delete the source, then flip the location preference LAST so the
+     * dynamic [rootfsDir] getter switches over only after data is really
+     * there. On any failure the source stays untouched and the preference
+     * keeps its old value → no corruption, no lost path.
+     */
+    suspend fun moveRootfs(toExternal: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val target = if (toExternal) externalRootfsDir ?: return@withContext false
+                     else File(context.filesDir, "alpine-rootfs")
+        val src = rootfsDir
+
+        // Already there?
+        if (src.absolutePath == target.absolutePath) {
+            locationPrefs.edit().putBoolean("use_external", toExternal).apply()
+            return@withContext true
+        }
+
+        try {
+            if (src.exists()) {
+                val staging = File(target.parentFile, "alpine-rootfs.moving")
+                if (staging.exists()) staging.deleteRecursively()
+                staging.mkdirs()
+                src.copyRecursively(staging, overwrite = true)
+                if (calculateDirSize(src) != calculateDirSize(staging)) {
+                    staging.deleteRecursively()
+                    return@withContext false
+                }
+                src.deleteRecursively()
+                if (!staging.renameTo(target)) {
+                    // Restore from staging rename failure: move staging back.
+                    staging.renameTo(src)
+                    return@withContext false
+                }
+            } else {
+                target.mkdirs()
+            }
+            locationPrefs.edit().putBoolean("use_external", toExternal).apply()
+            true
+        } catch (t: Throwable) {
+            Log.e(TAG, "moveRootfs(toExternal=$toExternal) failed", t)
+            File(target.parentFile, "alpine-rootfs.moving").deleteRecursively()
+            false
+        }
+    }
+
+    /** Which location is currently preferred (for UI radio state). */
+    fun prefersExternal(): Boolean = locationPrefs.getBoolean("use_external", false)
+
     suspend fun installIfNeeded() = withContext(Dispatchers.IO) {
         if (isInstalled) {
             Log.d(TAG, "Rootfs already installed at $rootfsDir")

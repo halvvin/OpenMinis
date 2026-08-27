@@ -17,6 +17,7 @@ import com.openminis.app.data.db.toSnapshot
 import com.openminis.app.data.model.ImageEndpointMode
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.ModelEntry
+import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.ModelOverrides
 import com.openminis.app.data.model.ModelGroup
 import com.openminis.app.data.model.ProviderConfig
@@ -2086,6 +2087,34 @@ class ProviderRepository(private val context: Context) {
         return false
     }
 
+
+    /**
+     * [T-user-batch-1] Bulk per-API model test: send a minimal chat request
+     * for EVERY model entry of ONE provider instance and report OK/FAIL.
+     * Only touches models belonging to this instance — other APIs are
+     * never queried. Used by the "Test all models" row in
+     * ProviderDetailScreen. Returns the entry-id → success map.
+     */
+    suspend fun testModelEntry(instance: ProviderInstance, entry: ModelEntry): Boolean {
+        val apiKey = loadApiKey(instance.id) ?: return false
+        return try {
+            val provider = com.openminis.app.provider.ProviderFactory.create(
+                instance, apiKey, entry.model, context,
+            )
+            val response = provider.sendMessage(
+                messages = listOf(
+                    LLMMessage(role = LLMMessage.Role.USER, content = "ping"),
+                ),
+                systemPrompt = "You are a health-check probe. Reply with exactly one word: ok",
+                maxTokens = 8,
+                temperature = 0.0,
+            )
+            response.text.isNotBlank()
+        } catch (e: Exception) {
+            android.util.Log.w("ProviderRepo", "testModelEntry(${entry.model.displayName}) failed: ${e.message}")
+            false
+        }
+    }
 
     suspend fun refreshModels(instance: ProviderInstance) {
         var apiKey = loadApiKey(instance.id)

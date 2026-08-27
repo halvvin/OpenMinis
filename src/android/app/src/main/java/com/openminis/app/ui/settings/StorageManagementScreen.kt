@@ -66,6 +66,8 @@ fun StorageManagementScreen(
     onBack: () -> Unit,
     onRootfsClick: () -> Unit,
     onSessionClick: (sessionId: String) -> Unit = {},
+    onCleanupClick: () -> Unit = {},
+    onRootfsSwitchClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -107,6 +109,24 @@ fun StorageManagementScreen(
     val totalSessionSize = sessions.sumOf { it.totalSize }
 
     SettingsScaffold(title = stringResource(R.string.storage_title), onBack = onBack) {
+        // Action rows: navigate to the rootfs location switcher and the bulk
+        // cleanup screen (user-requested features T-user-batch-1).
+        SettingsSection(header = stringResource(R.string.storage_section_actions)) {
+            StorageOverviewRow(
+                color = Color(0xFF34C759),
+                label = stringResource(R.string.storage_cleanup_button),
+                value = "",
+                onClick = onCleanupClick,
+                showDivider = true,
+            )
+            StorageOverviewRow(
+                color = Color(0xFFFF9500),
+                label = stringResource(R.string.storage_rootfs_switch),
+                value = "",
+                onClick = onRootfsSwitchClick,
+                showDivider = false,
+            )
+        }
         SettingsSection(header = stringResource(R.string.storage_section_overview)) {
             StorageOverviewRow(
                 color = Color(0xFF8E8E93),
