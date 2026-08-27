@@ -5759,6 +5759,20 @@ class ChatViewModel(
                 prefs.resetTaskState(sid)
                 return
             }
+            // [FIX-CIRCUIT-BREAKER] Global retry budget — prevents a runaway
+            // self-loop across sessions from hammering the API key into
+            // rate-limit block. After GLOBAL_CAP retries in 10 minutes the
+            // engine pauses for 5 minutes.
+            if (!prefs.tryAcquireRetry()) {
+                val cd = prefs.cooldownUntil()
+                val remaining = (cd - System.currentTimeMillis()) / 1000
+                appendSystemInfo(
+                    text = "⚠️ موتور ادامه خودکار: سقف تلاش سراسری رسید — ${remaining} ثانیه استراحت قبل از ادامه.",
+                    iconKind = "error",
+                )
+                prefs.resetTaskState(sid)
+                return
+            }
             prefs.setAttemptsFor(sid, attempt)
             appendSystemInfo(
                 text = "🔄 موتور ادامه خودکار: تلاش $attempt از ${config.maxAttempts} پس از ${describeInterval(config.intervalSeconds)}…",
@@ -5822,6 +5836,17 @@ class ChatViewModel(
             // [FIX-4] Per-session counters — no single-slot race.
             val used = prefs.attemptsFor(sid)
             if (used >= config.maxAttempts) {
+                prefs.resetTaskState(sid)
+                return
+            }
+            // [FIX-CIRCUIT-BREAKER] Global retry budget (same as keepWorkingOnError).
+            if (!prefs.tryAcquireRetry()) {
+                val cd = prefs.cooldownUntil()
+                val remaining = (cd - System.currentTimeMillis()) / 1000
+                appendSystemInfo(
+                    text = "⚠️ موتور ادامه خودکار: سقف تلاش سراسری رسید — ${remaining} ثانیه استراحت.",
+                    iconKind = "error",
+                )
                 prefs.resetTaskState(sid)
                 return
             }

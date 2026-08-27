@@ -87,6 +87,46 @@ class KeepWorkingPrefs private constructor(context: Context) {
 
     fun resetTaskState(sessionId: String) = setAttemptsFor(sessionId, 0)
 
+    // ── [FIX-CIRCUIT-BREAKER] Global cooldown — prevents a self-talk loop
+    // across sessions from hammering the API (user-reported: opening a new
+    // chat can cause the model to talk to itself and 'corrupt' the key —
+    // actually the key got rate-limited by a runaway retry loop). When the
+    // GLOBAL auto-continue count in a rolling window exceeds the cap, the
+    // whole engine pauses for COOLDOWN_MS. Individual per-session counters
+    // don't help here — many sessions × many retries still flood the API.
+
+    /** Timestamp (epoch ms) before which the engine stays paused. */
+    fun cooldownUntil(): Long = prefs.getLong(KEY_COOLDOWN_UNTIL, 0L)
+
+    /** True when the engine is currently in global cooldown. */
+    fun inCooldown(now: Long = System.currentTimeMillis()): Boolean =
+        now < cooldownUntil()
+
+    /**
+     * Called before every auto-continue. Returns true if this retry is
+     * allowed; when the cap is exceeded, arms the cooldown and returns false.
+     */
+    fun tryAcquireRetry(now: Long = System.currentTimeMillis()): Boolean {
+        if (inCooldown(now)) return false
+        val windowStart = now - WINDOW_MS
+        val recent = recentRetryTimes().filter { it > windowStart }
+        if (recent.size >= GLOBAL_CAP) {
+            prefs.edit().putLong(KEY_COOLDOWN_UNTIL, now + COOLDOWN_MS).apply()
+            return false
+        }
+        prefs.edit()
+            .putString(KEY_RETRY_TIMES, JSONArray(recent + now).toString())
+            .apply()
+        return true
+    }
+
+    private fun recentRetryTimes(): List<Long> = runCatching {
+        val a = JSONArray(prefs.getString(KEY_RETRY_TIMES, "[]") ?: "[]")
+        (0 until a.length()).map { a.optLong(it) }
+    }.getOrDefault(emptyList())
+
+    fun clearCooldown() = prefs.edit().remove(KEY_COOLDOWN_UNTIL).apply()
+
     /** Legacy single-slot accessors — kept for migration of old prefs. */
     @Deprecated("Use attemptsFor/setAttemptsFor")
 
@@ -100,6 +140,15 @@ class KeepWorkingPrefs private constructor(context: Context) {
         private const val KEY_TARGET_CHATS = "kw.target_chats"
         private const val KEY_ACTIVE_SESSIONS = "kw.active_sessions"
         private const val KEY_ATTEMPTS_USED = "kw.attempts_used"
+        // [FIX-CIRCUIT-BREAKER] Global retry budget.
+        private const val KEY_RETRY_TIMES = "kw.retry_times"
+        private const val KEY_COOLDOWN_UNTIL = "kw.cooldown_until"
+        /** Max global auto-continues per rolling window. */
+        private const val GLOBAL_CAP = 8
+        /** Rolling window for [GLOBAL_CAP]. */
+        private const val WINDOW_MS = 10 * 60_000L
+        /** Pause duration after the cap is exceeded. */
+        private const val COOLDOWN_MS = 5 * 60_000L
 
         @Volatile private var instance: KeepWorkingPrefs? = null
 
