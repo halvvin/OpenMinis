@@ -13,6 +13,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ASSETS_DIR="$PROJECT_ROOT/src/android/app/src/main/assets"
+# [T-fix-libproot] The app loads libproot.so from the native lib dir
+# (RootfsManager.prootBinary = nativeLibraryDir/libproot.so). jniLibs/*.so
+# is gitignored (built locally by deps/build_proot.sh), so CI must place
+# the Termux proot binary here too — otherwise PRoot never boots and the
+# sandbox shell is dead.
+JNILIBS_DIR="$PROJECT_ROOT/src/android/app/src/main/jniLibs/arm64-v8a"
 
 ALPINE_VERSION="3.21"
 ALPINE_RELEASE="3.21.3"
@@ -33,7 +39,7 @@ else
     PROOT_DEB_URL="$PROOT_REPO/pool/main/p/proot/proot_${PROOT_VERSION}_aarch64.deb"
 fi
 
-mkdir -p "$ASSETS_DIR"
+mkdir -p "$ASSETS_DIR" "$JNILIBS_DIR"
 
 ROOTFS_FILE="$ASSETS_DIR/alpine-minirootfs.tar.gz"
 PROOT_FILE="$ASSETS_DIR/proot-aarch64"
@@ -90,6 +96,17 @@ else
     cd "$PROJECT_ROOT"
 
     echo "✓ Extracted PRoot binary: $PROOT_FILE ($(du -h "$PROOT_FILE" | cut -f1))"
+fi
+
+# [T-fix-libproot] Ensure the app-loadable native lib exists. The Termux
+# proot matches the vendored Termux loaders (libproot-loader*.so), so this
+# is the correct pairing — the fork-built proot would SEGV with them.
+if [ ! -f "$JNILIBS_DIR/libproot.so" ]; then
+    cp "$PROOT_FILE" "$JNILIBS_DIR/libproot.so"
+    chmod 755 "$JNILIBS_DIR/libproot.so"
+    echo "✓ Installed libproot.so → jniLibs ($(du -h "$JNILIBS_DIR/libproot.so" | cut -f1))"
+else
+    echo "✓ libproot.so already present in jniLibs"
 fi
 
 echo ""
