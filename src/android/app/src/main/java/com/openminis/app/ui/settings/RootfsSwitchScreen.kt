@@ -37,8 +37,7 @@ fun RootfsSwitchScreen(
                     }
                 }
             )
-        },
-        snackbarHost = { SnackbarHost(it) }
+        }
     ) { padding ->
         Column(
             modifier = Modifier

@@ -3,7 +3,6 @@ package com.openminis.app.ui.settings
 import android.text.format.Formatter
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.ui.Alignment
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -13,8 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.data.db.ChatDao
-import com.openminis.app.ui.components.SettingsScaffold
-import com.openminis.app.ui.components.SettingsSection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
