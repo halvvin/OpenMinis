@@ -242,7 +242,7 @@ fun BrowserScreen(onBack: () -> Unit) {
     // Omnibox card) so progress/error/back/fwd are in scope everywhere.
     val tabUi = uiOf(active?.id.orEmpty())
 
-    fun runExtension(ext: BrowserExtension, tab: BrowserTab, webViewRef: WebView?) {
+    fun runExtension(ext: BrowserExtension, tab: BrowserTab, webViewRef: WebView?, promptOverride: String? = null) {
         val entry = modelEntries.value.firstOrNull { it.id == selectedEntryId }
             ?: modelEntries.value.firstOrNull()   // [T-models-fallback] auto-select
         if (entry == null) {
@@ -257,6 +257,7 @@ fun BrowserScreen(onBack: () -> Unit) {
             extResult = "❌ صفحه‌ای باز نیست."
             return
         }
+        val prompt = promptOverride ?: ext.prompt
         var answered = false
         wv.evaluateJavascript(
             "(function(){try{return (document.body?document.body.innerText:'').slice(0,10000);}catch(e){return '';}})()",
@@ -264,7 +265,7 @@ fun BrowserScreen(onBack: () -> Unit) {
             answered = true
             val page = v?.trim('"')?.replace("\\n", "\n")?.replace("\\\"", "\"")?.replace("\\\\", "\\").orEmpty()
             scope.launch {
-                extResult = runCatching { callModel(providerRepo, entry, ext.prompt, page) }
+                extResult = runCatching { callModel(providerRepo, entry, prompt, page) }
                     .getOrDefault("❌ خطا در اجرا")
                 extBusy = false
             }
@@ -272,7 +273,7 @@ fun BrowserScreen(onBack: () -> Unit) {
         scope.launch {
             kotlinx.coroutines.delay(4000)
             if (!answered && extBusy) {
-                extResult = runCatching { callModel(providerRepo, entry, ext.prompt, "") }.getOrDefault("❌ خطا")
+                extResult = runCatching { callModel(providerRepo, entry, prompt, "") }.getOrDefault("❌ خطا")
                 extBusy = false
             }
         }
@@ -494,11 +495,35 @@ fun BrowserScreen(onBack: () -> Unit) {
                                         onClick = { modelMenu = false },
                                     )
                                 }
-                                modelEntries.value.forEach { e ->
+                                // [FIX-API-FILTER] Show models GROUPED BY PROVIDER,
+                                // each group under its provider label — never a
+                                // flat dump of every model in the config. Only
+                                // providers whose instance is enabled + has an
+                                // API key are listed.
+                                val cfg = runCatching { providerRepo.config.value }.getOrNull()
+                                val grouped = modelEntries.value.groupBy { e ->
+                                    cfg?.instances?.firstOrNull { it.id == e.providerInstanceId }?.label
+                                        ?: e.model.provider
+                                }
+                                grouped.forEach { (providerLabel, entries) ->
                                     DropdownMenuItem(
-                                        text = { Text(e.model.displayName, maxLines = 1) },
-                                        onClick = { selectedEntryId = e.id; modelMenu = false },
+                                        text = {
+                                            Text(
+                                                "— $providerLabel —",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                maxLines = 1,
+                                            )
+                                        },
+                                        enabled = false,
+                                        onClick = {},
                                     )
+                                    entries.forEach { e ->
+                                        DropdownMenuItem(
+                                            text = { Text(e.model.displayName, maxLines = 1) },
+                                            onClick = { selectedEntryId = e.id; modelMenu = false },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -762,8 +787,43 @@ fun BrowserScreen(onBack: () -> Unit) {
                                 )
                             } else {
                                 val ext = EXTENSIONS.first { it.id == openExtension }
-                                TextButton(onClick = { runExtension(ext, active, webViewPool[active.id]) }, enabled = !extBusy) {
-                                    Text("اجرا روی این صفحه")
+                                // [FIX-LANG] Language selector for the translate extension.
+                                var targetLang by remember { mutableStateOf("فارسی") }
+                                val langList = listOf("فارسی", "English", "العربية", "Türkçe", "Deutsch", "Français", "Español", "Русский", "中文", "日本語", "한국어", "Italiano", "Português", "Hindi", "اردو")
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    TextButton(onClick = {
+                                        val prompt = if (openExtension == "translate")
+                                            "متن این صفحه را به زبان $targetLang ترجمه کن. فقط متن ترجمه‌شده را برگردان، بدون توضیح اضافه."
+                                        else ext.prompt
+                                        runExtension(ext, active, webViewPool[active.id], prompt)
+                                    }, enabled = !extBusy) {
+                                        Text("اجرا روی این صفحه")
+                                    }
+                                    if (openExtension == "translate") {
+                                        var langMenu by remember { mutableStateOf(false) }
+                                        Box {
+                                            Text(
+                                                targetLang,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                modifier = Modifier
+                                                    .clickable { langMenu = true }
+                                                    .background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(6.dp))
+                                                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                                            )
+                                            DropdownMenu(expanded = langMenu, onDismissRequest = { langMenu = false }) {
+                                                langList.forEach { lang ->
+                                                    DropdownMenuItem(
+                                                        text = { Text(lang) },
+                                                        onClick = { targetLang = lang; langMenu = false },
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                                 if (extBusy) CircularProgressIndicator(modifier = Modifier.size(16.dp))
                                 if (extResult.isNotBlank()) {

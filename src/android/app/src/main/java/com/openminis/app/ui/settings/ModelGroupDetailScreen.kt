@@ -274,7 +274,12 @@ fun ModelGroupDetailScreen(
                     }
                 }
             } else {
-                itemsIndexed(memberIds, key = { _, id -> id }) { _, entryId ->
+                // [FIX] Deduplicate member ids — the same entry id twice in the
+                // list causes a LazyColumn crash ("Key was already used") and
+                // a hard app crash. Duplicates can arrive via sync or manual
+                // re-add; filtering at render time is the safety net.
+                val uniqueMemberIds = memberIds.distinct()
+                itemsIndexed(uniqueMemberIds, key = { _, id -> id }) { _, entryId ->
                     // [T-android-provider-voice] System voice sentinels aren't
                     // persisted entries — resolve them to virtual entries so the
                     // default Voice Input/Output members render normally instead
