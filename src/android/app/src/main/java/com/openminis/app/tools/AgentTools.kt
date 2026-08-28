@@ -38,6 +38,9 @@ object AgentTools {
         add(FileReadTool.definition())
         add(FileWriteTool.definition())
         add(FileEditTool.definition())
+        // [T-assistant-tools] Real device tools — always available.
+        add(DownloadTool.definition())
+        add(FileOpsTool.definition())
         if (supportsImageInput || visionGroupConfigured) {
             add(ReadImageTool.definition())
         }
