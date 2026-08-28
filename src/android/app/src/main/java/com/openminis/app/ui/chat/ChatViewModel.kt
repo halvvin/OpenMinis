@@ -59,6 +59,7 @@ import com.openminis.app.tools.DownloadTool
 import com.openminis.app.tools.FileOpsTool
 import com.openminis.app.tools.PdfTool
 import com.openminis.app.tools.TranslateTool
+import com.openminis.app.tools.WebExtractTool
 import com.openminis.app.tools.FileReadTool
 import com.openminis.app.tools.FileWriteTool
 import com.openminis.app.tools.MemoryTools
@@ -8267,6 +8268,7 @@ class ChatViewModel(
             TranslateTool.NAME -> TranslateTool.execute(
                 argsJson, providerRepository, _activeEntryId.value, context,
             )
+            WebExtractTool.NAME -> WebExtractTool.execute(argsJson, context)
             // T178: pass sessionId + context so read_image routes through
             // resolveSessionHostPath like file_read/write/edit do — without
             // these, the tool consults the global last-writer-wins
@@ -11329,6 +11331,7 @@ Only invoke these tools when the user explicitly asks you to interact with anoth
         "file_ops" -> "File Operations"
         "read_pdf" -> "Read PDF"
         "translate_text" -> "Translate Text"
+        "web_extract" -> "Extract Web Page"
         "web_search" -> "Search Web"
         else -> toolName
             .split('_')
