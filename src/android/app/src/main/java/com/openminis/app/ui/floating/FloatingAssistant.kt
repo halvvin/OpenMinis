@@ -88,6 +88,17 @@ fun FloatingAssistantOverlay(
     var panelH by remember { mutableStateOf(prefs.assistantH) }
     var input by remember { mutableStateOf("") }
     var modelMenu by remember { mutableStateOf(false) }
+    var providerMenu by remember { mutableStateOf(false) }
+    // Current provider label for the selected model
+    var selProviderLabel by remember { mutableStateOf("") }
+    // Update provider label when model changes
+    LaunchedEffect(selectedEntryId) {
+        selProviderLabel = runCatching {
+            providerRepository.config.value.instances
+                .firstOrNull { it.id == (modelEntries.firstOrNull { it.id == selectedEntryId }?.providerInstanceId) }?.label
+                ?: ""
+        }.getOrDefault("")
+    }
 
     fun clampPanel() {
         val w = panelW.toFloat().coerceAtLeast(52f)
@@ -163,7 +174,44 @@ fun FloatingAssistantOverlay(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 Text("🤖", style = MaterialTheme.typography.titleMedium)
-                // Model selector — grouped by API.
+                // Two-step selector: API first, then its models.
+                Box {
+                    Text(
+                        selProviderLabel.ifBlank { "انتخاب API" },
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clickable { providerMenu = true }
+                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                    )
+                    DropdownMenu(expanded = providerMenu, onDismissRequest = { providerMenu = false }) {
+                        val providers = modelEntries
+                            .groupBy { e ->
+                                runCatching { providerRepository.config.value.instances }
+                                    .getOrNull()?.firstOrNull { it.id == e.providerInstanceId }?.label
+                                    ?: e.model.provider
+                            }
+                        if (providers.isEmpty()) {
+                            DropdownMenuItem(
+                                text = { Text("(لیست خالی — اول یک API تنظیم کن)") },
+                                onClick = { providerMenu = false },
+                            )
+                        }
+                        providers.forEach { (provider, entries) ->
+                            DropdownMenuItem(
+                                text = { Text(provider, maxLines = 1) },
+                                onClick = {
+                                    selProviderLabel = provider
+                                    providerMenu = false
+                                    // Auto-select the first model of this API.
+                                    viewModel.selectModel(entries.first().id)
+                                },
+                            )
+                        }
+                    }
+                }
+                // Model selector — only models of the selected API.
                 Box {
                     Text(
                         modelEntries.firstOrNull { it.id == selectedEntryId }?.model?.displayName ?: "انتخاب مدل",
@@ -175,31 +223,25 @@ fun FloatingAssistantOverlay(
                             .padding(horizontal = 6.dp, vertical = 4.dp),
                     )
                     DropdownMenu(expanded = modelMenu, onDismissRequest = { modelMenu = false }) {
-                        if (modelEntries.isEmpty()) {
+                        val filtered = if (selProviderLabel.isNotBlank()) {
+                            modelEntries.filter { e ->
+                                val lbl = runCatching { providerRepository.config.value.instances }
+                                    .getOrNull()?.firstOrNull { it.id == e.providerInstanceId }?.label
+                                    ?: e.model.provider
+                                lbl == selProviderLabel
+                            }
+                        } else modelEntries
+                        if (filtered.isEmpty()) {
                             DropdownMenuItem(
-                                text = { Text("(لیست خالی — اول یک API تنظیم کن)") },
+                                text = { Text("(مدلی برای این API نیست)") },
                                 onClick = { modelMenu = false },
                             )
                         }
-                        val grouped = modelEntries.groupBy { e ->
-                            runCatching { providerRepository.config.value.instances }
-                                .getOrNull()?.firstOrNull { it.id == e.providerInstanceId }?.label
-                                ?: e.model.provider
-                        }
-                        grouped.forEach { (provider, entries) ->
+                        filtered.forEach { e ->
                             DropdownMenuItem(
-                                text = {
-                                    Text("— $provider —", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1)
-                                },
-                                enabled = false,
-                                onClick = {},
+                                text = { Text(e.model.displayName, maxLines = 1) },
+                                onClick = { viewModel.selectModel(e.id); modelMenu = false },
                             )
-                            entries.forEach { e ->
-                                DropdownMenuItem(
-                                    text = { Text(e.model.displayName, maxLines = 1) },
-                                    onClick = { viewModel.selectModel(e.id); modelMenu = false },
-                                )
-                            }
                         }
                     }
                 }
