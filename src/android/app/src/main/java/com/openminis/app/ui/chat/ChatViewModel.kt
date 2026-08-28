@@ -57,6 +57,8 @@ import com.openminis.app.tools.AgentTools
 import com.openminis.app.tools.FileEditTool
 import com.openminis.app.tools.DownloadTool
 import com.openminis.app.tools.FileOpsTool
+import com.openminis.app.tools.PdfTool
+import com.openminis.app.tools.TranslateTool
 import com.openminis.app.tools.FileReadTool
 import com.openminis.app.tools.FileWriteTool
 import com.openminis.app.tools.MemoryTools
@@ -8261,6 +8263,10 @@ class ChatViewModel(
             // [T-assistant-tools] Real device tools (always available).
             DownloadTool.NAME -> DownloadTool.execute(argsJson, context)
             FileOpsTool.NAME -> FileOpsTool.execute(argsJson, context)
+            PdfTool.NAME -> PdfTool.execute(argsJson, context)
+            TranslateTool.NAME -> TranslateTool.execute(
+                argsJson, providerRepository, _activeEntryId.value, context,
+            )
             // T178: pass sessionId + context so read_image routes through
             // resolveSessionHostPath like file_read/write/edit do — without
             // these, the tool consults the global last-writer-wins
@@ -11321,6 +11327,8 @@ Only invoke these tools when the user explicitly asks you to interact with anoth
         "memory_get" -> "Read Memory"
         "download_file" -> "Download File"
         "file_ops" -> "File Operations"
+        "read_pdf" -> "Read PDF"
+        "translate_text" -> "Translate Text"
         "web_search" -> "Search Web"
         else -> toolName
             .split('_')

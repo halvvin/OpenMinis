@@ -41,6 +41,8 @@ object AgentTools {
         // [T-assistant-tools] Real device tools — always available.
         add(DownloadTool.definition())
         add(FileOpsTool.definition())
+        add(PdfTool.definition())
+        add(TranslateTool.definition())
         if (supportsImageInput || visionGroupConfigured) {
             add(ReadImageTool.definition())
         }
