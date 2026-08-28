@@ -34,6 +34,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -62,7 +63,7 @@ import com.openminis.app.automation.AutomationPrefs
  * and (in later stages) run tools. v1: bubble + panel + model selector +
  * direct model chat.
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun FloatingAssistantOverlay(
     viewModel: FloatingAssistantViewModel,
@@ -267,7 +268,17 @@ fun FloatingAssistantOverlay(
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 items(messages, key = { "${it.role}-${it.hashCode()}" }) { m ->
-                    Card(modifier = Modifier.fillMaxWidth()) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            // Copy message text to clipboard on tap (user asked:
+                            // "وقتی متنی چیزی گفتم قابل کپی کردن باشد").
+                            runCatching {
+                                val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                cm.setPrimaryClip(android.content.ClipData.newPlainText("assistant", m.text))
+                            }
+                        },
+                    ) {
                         Text(
                             (if (m.role == "user") "🧑 " else "🤖 ") + m.text,
                             style = MaterialTheme.typography.bodySmall,
