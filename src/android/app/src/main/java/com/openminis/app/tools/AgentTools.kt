@@ -45,6 +45,8 @@ object AgentTools {
         add(TranslateTool.definition())
         add(WebExtractTool.definition())
         add(OcrTool.definition())
+        add(WebSearchTool.definition())
+        add(FileSearchTool.definition())
         if (supportsImageInput || visionGroupConfigured) {
             add(ReadImageTool.definition())
         }
