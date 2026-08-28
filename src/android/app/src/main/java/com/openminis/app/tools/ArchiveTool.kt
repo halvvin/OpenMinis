@@ -11,7 +11,7 @@ import java.util.zip.ZipInputStream
 /**
  * [T-archive-tool] REAL archive (ZIP) handling — list, extract, read entries.
  * Mirrors the Vega-Agent list_archive / extract_archive_entry / read_archive_entry
- * tools. Works on /var/minis/* and /sdcard/* paths.
+ * tools. Works on /var/minis paths and /sdcard paths.
  */
 object ArchiveTool {
 
@@ -61,7 +61,8 @@ object ArchiveTool {
                             count++
                             if (count <= 100) {
                                 val size = if (ze.isDirectory) "[پوشه]" else String.format("%.1fKB", ze.size / 1024.0)
-                                sb.append("  ${if (ze.isDirectory) "📂" else "📄"} ${ze.name}  [$size]\n")
+                                val icon = if (ze.isDirectory) "📂" else "📄"
+                                sb.append("  $icon ${ze.name}  [$size]\n")
                             }
                             zis.closeEntry()
                             ze = zis.nextEntry

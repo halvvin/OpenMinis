@@ -8,8 +8,8 @@ import java.io.File
 
 /**
  * [T-filesearch-tool] REAL file search by glob pattern on the device.
- * Based on the Vega-Agent search_files/glob pattern. Searches /var/minis/*
- * and /sdcard/** with a glob (e.g. *.pdf, *report*, DCIM/**).
+ * Based on the Vega-Agent search_files/glob pattern. Searches /var/minis
+ * and /sdcard with a glob (e.g. *.pdf, *report*, IMG_*).
  */
 object FileSearchTool {
 

@@ -455,10 +455,6 @@ fun AppNavigation(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
-            enterTransition = { slideInHorizontally(initialOffsetX = { it / 4 }) + fadeIn(tween(animMs)) },
-            exitTransition = { slideOutHorizontally(targetOffsetX = { -it / 4 }) + fadeOut(tween(animMs)) },
-            popEnterTransition = { slideInHorizontally(initialOffsetX = { -it / 4 }) + fadeIn(tween(animMs)) },
-            popExitTransition = { slideOutHorizontally(targetOffsetX = { it / 4 }) + fadeOut(tween(animMs)) },
     ) {
         //   - exit uses EmphasizedAccelerate (cubic-bezier 0.3, 0.0, 0.8, 0.15)
         //     so the leaving destination clears out fast
