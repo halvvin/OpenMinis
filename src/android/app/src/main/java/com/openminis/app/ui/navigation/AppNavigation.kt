@@ -16,6 +16,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.openminis.app.ui.floating.FloatingAssistantOverlay
+import com.openminis.app.ui.floating.FloatingAssistantViewModel
 import com.openminis.app.deeplink.DeepLinkAction
 import com.openminis.app.deeplink.DeepLinkCoordinator
 import com.openminis.app.ui.settings.KEY_LAUNCH_SESSION
@@ -1329,8 +1331,8 @@ fun AppNavigation(
         }
         } // ← closes NavHost content lambda
         // [T-floating-assistant] Smart Assistant floating window overlay.
-        com.openminis.app.ui.floating.FloatingAssistantOverlay(
-            viewModel = remember { com.openminis.app.ui.floating.FloatingAssistantViewModel(context.applicationContext, providerRepository) },
+        FloatingAssistantOverlay(
+            viewModel = remember { FloatingAssistantViewModel(context.applicationContext, providerRepository) },
             providerRepository = providerRepository,
         )
     }
