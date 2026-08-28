@@ -8293,7 +8293,7 @@ class ChatViewModel(
             FileOpsTool.NAME -> FileOpsTool.execute(argsJson, context)
             PdfTool.NAME -> PdfTool.execute(argsJson, context)
             TranslateTool.NAME -> TranslateTool.execute(
-                argsJson, providerRepository, _activeEntryId.value, context,
+                argsJson, providerRepository, _activeEntryId.value.orEmpty(), context,
             )
             WebExtractTool.NAME -> WebExtractTool.execute(argsJson, context)
             OcrTool.NAME -> OcrTool.execute(argsJson, context)

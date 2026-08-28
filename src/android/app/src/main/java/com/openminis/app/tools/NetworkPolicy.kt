@@ -17,22 +17,15 @@ import java.net.URI
  */
 object NetworkPolicy {
 
-    /** Private/loopback/link-local/metadata ranges to block. */
+    /** Private/loopback/link-local/metadata ranges to block (as Long). */
     private val BLOCKED_RANGES = listOf(
-        // Loopback
-        0x7F000000 to 0x7FFFFFFF,          // 127.0.0.0/8
-        // RFC1918 private
-        0x0A000000 to 0x0AFFFFFF,          // 10.0.0.0/8
-        0xAC100000 to 0xAC1FFFFF,          // 172.16.0.0/12
-        0xC0A80000 to 0xC0A8FFFF,          // 192.168.0.0/16
-        // Link-local
-        0xA9FE0000 to 0xA9FEFFFF,          // 169.254.0.0/16
-        // AWS metadata / ECS
-        0xFE800000 to 0xFEBFFFFF.toInt(),  // 169.254.169.254 is inside link-local
-        // CGNAT (100.64.0.0/10)
-        0x64400000 to 0x647FFFFF,
-        // Reserved
-        0x00000000 to 0x00FFFFFF,
+        0x7F000000L to 0x7FFFFFFFL,          // 127.0.0.0/8
+        0x0A000000L to 0x0AFFFFFFL,          // 10.0.0.0/8
+        0xAC100000L to 0xAC1FFFFFL,          // 172.16.0.0/12
+        0xC0A80000L to 0xC0A8FFFFL,          // 192.168.0.0/16
+        0xA9FE0000L to 0xA9FEFFFFL,          // 169.254.0.0/16
+        0x64400000L to 0x647FFFFFL,          // 100.64.0.0/10 (CGNAT)
+        0x00000000L to 0x00FFFFFFL,          // 0.0.0.0/8 (reserved)
     )
 
     /**
@@ -51,10 +44,10 @@ object NetworkPolicy {
         }
         if (ip is Inet4Address) {
             val raw = ip.address
-            val int = ((raw[0].toInt() and 0xFF) shl 24) or
-                ((raw[1].toInt() and 0xFF) shl 16) or
-                ((raw[2].toInt() and 0xFF) shl 8) or
-                (raw[3].toInt() and 0xFF)
+            val int = ((raw[0].toLong() and 0xFFL) shl 24) or
+                ((raw[1].toLong() and 0xFFL) shl 16) or
+                ((raw[2].toLong() and 0xFFL) shl 8) or
+                (raw[3].toLong() and 0xFFL)
             val blocked = BLOCKED_RANGES.any { int in it.first..it.second }
             if (blocked) {
                 return "مقصد «$host» (${ip.hostAddress}) در محدوده داخلی است و برای امنیت بلاک شد (SSRF guard)."

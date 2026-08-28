@@ -65,7 +65,7 @@ import com.openminis.app.automation.AutomationPrefs
  */
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun FloatingAssistantOverlay(
+fun BoxScope.FloatingAssistantOverlay(
     viewModel: FloatingAssistantViewModel,
     providerRepository: com.openminis.app.data.repository.ProviderRepository,
     modifier: Modifier = Modifier,

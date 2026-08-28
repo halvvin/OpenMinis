@@ -185,6 +185,7 @@ class AutomationPrefs private constructor(context: Context) {
         private const val KEY_FA_W = "fa.w"
         private const val KEY_FA_H = "fa.h"
         private const val KEY_FA_MODEL = "fa.model"
+        private const val KEY_EXEC_MODE = "fa.exec_mode"
 
         @Volatile private var instance: AutomationPrefs? = null
 

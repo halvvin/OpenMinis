@@ -68,12 +68,9 @@ object TranslateTool {
             return ToolExecutionResult("❌ مدلی تنظیم نشده — اول یک API در تنظیمات اضافه کن.", false, toolTitle = toolTitle)
         }
 
-        return kotlinx.coroutines.runCatching {
-            val instance = providerRepo.instance(entry.providerInstanceId)
-            val apiKey = instance?.let { providerRepo.usableApiKey(it) }
-            if (instance == null || apiKey == null) {
-                return ToolExecutionResult("❌ کلید API در دسترس نیست.", false, toolTitle = toolTitle)
-            }
+        return try {
+            val instance = providerRepo.instance(entry.providerInstanceId) ?: return ToolExecutionResult("❌ کلید API در دسترس نیست.", false, toolTitle = toolTitle)
+            val apiKey = providerRepo.usableApiKey(instance) ?: return ToolExecutionResult("❌ کلید API در دسترس نیست.", false, toolTitle = toolTitle)
             val provider = ProviderFactory.create(instance, apiKey, entry.model, context)
             val srcHint = if (sourceLang.isNotBlank()) " Source language: $sourceLang." else " Source language: auto-detect."
             val sys = "You are a precise translation engine. Translate the user's text into $targetLang.$srcHint " +
@@ -85,7 +82,7 @@ object TranslateTool {
             )
             val translated = resp.text.ifBlank { "(خروجی خالی از مدل)" }
             ToolExecutionResult("🌍 ترجمه به $targetLang:\n\n$translated", true, toolTitle = toolTitle)
-        }.getOrElse { e ->
+        } catch (e: Exception) {
             ToolExecutionResult("❌ ترجمه ناموفق: ${e.message ?: "خطا"}", false, toolTitle = toolTitle)
         }
     }
