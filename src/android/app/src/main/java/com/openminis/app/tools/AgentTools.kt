@@ -44,6 +44,7 @@ object AgentTools {
         add(PdfTool.definition())
         add(TranslateTool.definition())
         add(WebExtractTool.definition())
+        add(OcrTool.definition())
         if (supportsImageInput || visionGroupConfigured) {
             add(ReadImageTool.definition())
         }
