@@ -48,6 +48,10 @@ object WebExtractTool {
         if (url.isEmpty() || !url.startsWith("http")) {
             return ToolExecutionResult("Error: 'url' must be a valid http(s) URL.", false, toolTitle = toolTitle)
         }
+        val ssrfError = NetworkPolicy.check(url)
+        if (ssrfError != null) {
+            return ToolExecutionResult("⛔ $ssrfError", false, toolTitle = toolTitle)
+        }
 
         return try {
             val conn = URL(url).openConnection() as HttpURLConnection
@@ -66,9 +70,21 @@ object WebExtractTool {
             val html = conn.inputStream.bufferedReader().use { it.readText() }.take(2_000_000)
             conn.disconnect()
 
-            val title = Regex("(?is)<title[^>]*>(.*?)</title>").find(html)?.groupValues?.get(1)?.trim().orEmpty()
+            // [T-human-fetch] If the plain fetch hit an anti-bot wall
+            // (Cloudflare challenge / generic JS gate), retry in a REAL WebView
+            // that can run the challenge's JavaScript like a browser would.
+            var pageHtml = html
+            if (isBlockedPage(html) && HumanFetch.available()) {
+                HumanFetch.init(context)
+                val human = HumanFetch.fetch(url, 25000)
+                if (human != null && human.html.isNotEmpty() && !human.blocked) {
+                    pageHtml = human.html
+                }
+            }
+
+            val title = Regex("(?is)<title[^>]*>(.*?)</title>").find(pageHtml)?.groupValues?.get(1)?.trim().orEmpty()
             // Strip scripts/styles/tags → visible text.
-            val text = html
+            val text = pageHtml
                 .replace(Regex("(?is)<(script|style|noscript)[^>]*>.*?</\\1>"), " ")
                 .replace(Regex("(?is)<br\\s*/?>"), "\n")
                 .replace(Regex("(?is)</p|</div|</h[1-6]|</li|</tr>"), "\n")
@@ -76,9 +92,9 @@ object WebExtractTool {
                 .replace(Regex("\\s+"), " ")
                 .trim()
             // Links + images.
-            val links = Regex("(?i)href=[\"']([^\"']+)[\"']").findAll(html)
+            val links = Regex("(?i)href=[\"']([^\"']+)[\"']").findAll(pageHtml)
                 .map { it.groupValues[1] }.filter { it.startsWith("http") }.distinct().take(40).toList()
-            val images = Regex("(?i)src=[\"']([^\"']+)[\"']").findAll(html)
+            val images = Regex("(?i)src=[\"']([^\"']+)[\"']").findAll(pageHtml)
                 .map { it.groupValues[1] }.filter { it.startsWith("http") }.distinct().take(30).toList()
 
             val excerpt = text.take(maxChars)
@@ -108,5 +124,13 @@ object WebExtractTool {
         } catch (e: Exception) {
             ToolExecutionResult("❌ دریافت صفحه ناموفق: ${e.message ?: "خطا"}", false, toolTitle = toolTitle)
         }
+    }
+
+    /** Detect anti-bot challenge pages (Cloudflare, generic JS gates). */
+    private fun isBlockedPage(html: String): Boolean {
+        val lower = html.lowercase()
+        return lower.contains("cf-challenge") || lower.contains("challenge-form") ||
+            lower.contains("just a moment") || lower.contains("cf-browser-verification") ||
+            lower.contains("attention required") || lower.contains("enable javascript")
     }
 }

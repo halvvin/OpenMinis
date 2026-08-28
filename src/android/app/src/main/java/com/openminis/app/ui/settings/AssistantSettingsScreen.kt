@@ -51,6 +51,29 @@ fun AssistantSettingsScreen(onBack: () -> Unit) {
                 Text("فعال بودن دستیار شناور", style = MaterialTheme.typography.bodyLarge)
                 Switch(checked = enabled, onCheckedChange = { enabled = it })
             }
+            // [T-execution-modes] Mode selector (AUTO / PLANNING / ACCEPT).
+            var mode by remember { mutableStateOf(prefs.executionMode) }
+            Text("حالت اجرا", style = MaterialTheme.typography.bodyLarge)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0 to "خودکار", 1 to "برنامه‌ریزی", 2 to "تأیید مرحله‌ای").forEach { (m, label) ->
+                    TextButton(
+                        onClick = { mode = m; prefs.executionMode = m },
+                        colors = ButtonDefaults.textButtonColors(
+                            containerColor = if (mode == m) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceVariant,
+                        ),
+                    ) { Text(label, style = MaterialTheme.typography.labelMedium) }
+                }
+            }
+            Text(
+                when (mode) {
+                    1 -> "دستیار اول برنامه می‌دهد، تأیید شما را می‌گیرد، بعد اجرا می‌کند."
+                    2 -> "قبل از هر ابزار، از شما تأیید می‌گیرد."
+                    else -> "دستیار آزادانه و بدون تأیید مرحله‌به‌مرحله کارها را انجام می‌دهد."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Text(
                 "دستیار شناور یک پنجره شناور روی همه صفحه‌های اپ است که می‌توانید با هر مدل/API گفتگو کنید و (در نسخه‌های بعدی) کارهای مختلفی روی گوشی انجام دهید.",
                 style = MaterialTheme.typography.bodySmall,

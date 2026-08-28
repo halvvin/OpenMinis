@@ -88,8 +88,11 @@ object FileEditTool {
 
             file.writeText(newContent)
             val replacements = if (replaceAll) count else 1
+            // [T-file-diff] Show what changed.
+            val diff = try { FileDiff.diff(content, newContent) } catch (_: Exception) { "" }
+            val diffSuffix = if (diff.isNotBlank()) "\n\n📊 تغییرات:\n$diff" else ""
             ToolExecutionResult(
-                "Edited $path ($replacements replacement(s), ${newContent.length} bytes)",
+                "Edited $path ($replacements replacement(s), ${newContent.length} bytes)$diffSuffix",
                 true, toolTitle = toolTitle
             )
         } catch (e: Exception) {

@@ -84,6 +84,11 @@ class AutomationPrefs private constructor(context: Context) {
         get() = prefs.getBoolean(KEY_FA_ENABLED, true)
         set(v) = prefs.edit().putBoolean(KEY_FA_ENABLED, v).apply()
 
+    // ── [T-execution-modes] Execution mode (0=AUTO, 1=PLANNING, 2=ACCEPT) ──
+    var executionMode: Int
+        get() = prefs.getInt(KEY_EXEC_MODE, 0)
+        set(v) = prefs.edit().putInt(KEY_EXEC_MODE, v).apply()
+
     /** Whether the assistant panel is currently expanded. */
     var assistantOpen: Boolean
         get() = prefs.getBoolean(KEY_FA_OPEN, false)

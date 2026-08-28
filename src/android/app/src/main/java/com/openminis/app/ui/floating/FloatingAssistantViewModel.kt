@@ -95,7 +95,17 @@ class FloatingAssistantViewModel(
                         "❌ کلید API برای «${entry.model.displayName}» در دسترس نیست — تنظیمات → Providers را چک کن."
                     } else {
                         val provider = ProviderFactory.create(instance, apiKey, entry.model, appContext)
-                        val sys = "تو دستیار هوشمند همه‌کاره هستی. می‌توانی برای کاربر هر کاری انجام دهی: جستجو، توضیح، ترجمه، کدنویسی، برنامه‌ریزی، تحلیل فایل و هر سؤال دیگر. اگر کاربر چیزی می‌خواهد که نیاز به ابزار (اجرای دستور، خواندن فایل، وب‌گردی) دارد، راهنمایی کن که چه ابزاری لازم است. فارسی جواب بده مگر خلافش خواسته شود."
+                        val sys = buildString {
+                            append("تو دستیار هوشمند همه‌کاره هستی. می‌توانی برای کاربر هر کاری انجام دهی: جستجو، توضیح، ترجمه، کدنویسی، برنامه‌ریزی، تحلیل فایل و هر سؤال دیگر. اگر کاربر چیزی می‌خواهد که نیاز به ابزار (اجرای دستور، خواندن فایل، وب‌گردی) دارد، راهنمایی کن که چه ابزاری لازم است. فارسی جواب بده مگر خلافش خواسته شود.")
+                            // [T-execution-modes] Append the mode instruction.
+                            val modes = listOf(
+                                "AUTO MODE: You have full autonomy. Use every tool freely — reading, writing, editing, deleting, searching the web and downloading — to accomplish the task end to end. Do not stop to ask, do not offer to proceed. Just do the work and report what you did.",
+                                "PLANNING MODE: Review the task and present a step-by-step plan BEFORE executing anything. Ask the user to confirm the plan, then execute. After execution, report the results.",
+                                "ACCEPT MODE: Before EVERY tool call — reading a file, listing a folder, searching, browsing the web, writing, editing, deleting, downloading — explain to the user what you are about to do and WHY. Wait for their explicit go-ahead (they'll say 'continue' or 'ok'). Never call a tool without first announcing it and getting a response. After the user approves, call the tool, then report the result.",
+                            )
+                            val mode = prefs.executionMode.coerceIn(0, 2)
+                            append("\n\n${modes[mode]}")
+                        }
                         val resp = provider.sendMessage(
                             messages = listOf(
                                 LLMMessage(

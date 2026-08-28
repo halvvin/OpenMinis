@@ -45,6 +45,10 @@ object DownloadTool {
         if (url.isEmpty() || !url.startsWith("http")) {
             return ToolExecutionResult("Error: 'url' must be a valid http(s) URL.", false, toolTitle = toolTitle)
         }
+        val ssrfError = NetworkPolicy.check(url)
+        if (ssrfError != null) {
+            return ToolExecutionResult("⛔ $ssrfError", false, toolTitle = toolTitle)
+        }
         val userAgent = args.optString("user_agent", "")
             .ifBlank { "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36" }
         var filename = args.optString("filename", "").trim()
