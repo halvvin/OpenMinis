@@ -249,10 +249,26 @@ class RootfsManager private constructor(private val context: Context) {
             )
         }
 
-        // No libtalloc staging: deps/build_proot.sh links talloc statically
-        // (the binary carries no DT_NEEDED for libtalloc.so), so there is no
-        // shared object to version-rename. Older builds shipped libtalloc.so
-        // in jniLibs and copied it here as libtalloc.so.2.
+        // [T-fix-libtalloc] The Termux proot binary is DYNAMICALLY linked
+        // against libtalloc.so.2 (DT_NEEDED). AGP only packages *.so files
+        // into lib/, so the talloc lib ships as libtalloc.so and is copied
+        // here as libtalloc.so.2 (the name the linker asks for). Without
+        // this, proot fails with: CANNOT LINK EXECUTABLE ".../libproot.so":
+        // library "libtalloc.so.2" not found.
+        try {
+            val nativeDir = File(context.applicationInfo.nativeLibraryDir)
+            val tallocSo = File(nativeDir, "libtalloc.so")
+            val tallocSo2 = File(nativeDir, "libtalloc.so.2")
+            if (tallocSo.exists() && !tallocSo2.exists()) {
+                tallocSo.copyTo(tallocSo2, overwrite = true)
+                tallocSo2.setExecutable(true, false)
+                Log.i(TAG, "Staged libtalloc.so.2 next to proot (${tallocSo2.length()} bytes)")
+            } else if (tallocSo2.exists()) {
+                Log.d(TAG, "libtalloc.so.2 already present")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "libtalloc staging failed: ${e.message} — proot may fail to link", e)
+        }
 
         Log.d(TAG, "PRoot binary available at $prootBinary")
     }
