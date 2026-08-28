@@ -128,6 +128,7 @@ src/android/app/src/main/jniLibs/arm64-v8a/*.so
 # or rebuilt from anything in this tree. See deps/build_proot.sh.
 !src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader.so
 !src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so
+!src/android/app/src/main/jniLibs/arm64-v8a/libtalloc.so.2
 deps/lame-build/
 deps/lame-3.100/**/.libs/
 

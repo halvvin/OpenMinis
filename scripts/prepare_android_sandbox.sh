@@ -109,6 +109,42 @@ else
     echo "✓ libproot.so already present in jniLibs"
 fi
 
+# [T-fix-libtalloc] The Termux proot binary is DYNAMICALLY linked against
+# libtalloc.so.2 (the repo's build_proot.sh builds a static one, but the CI
+# uses the Termux package). Without libtalloc.so.2 next to it, proot fails
+# with: CANNOT LINK EXECUTABLE ".../libproot.so": library "libtalloc.so.2"
+# not found. Download the Termux libtalloc package and install the .so.
+TALLOC_VERSION="2.4.3"
+TALLOC_DEB_URL="$PROOT_REPO/pool/main/libt/libtalloc/libtalloc_${TALLOC_VERSION}_aarch64.deb"
+TALLOC_LIB="$JNILIBS_DIR/libtalloc.so.2"
+if [ ! -f "$TALLOC_LIB" ]; then
+    echo "Downloading libtalloc ${TALLOC_VERSION} aarch64 from Termux..."
+    TMPT="$(mktemp -d)"
+    if curl -fsSL -m 60 -o "$TMPT/talloc.deb" "$TALLOC_DEB_URL" 2>/dev/null; then
+        cd "$TMPT"
+        ar x talloc.deb 2>/dev/null
+        # Extract whichever data archive variant is present.
+        if [ -f data.tar.xz ]; then tar xf data.tar.xz
+        elif [ -f data.tar.gz ]; then tar xzf data.tar.gz
+        elif [ -f data.tar.zst ]; then zstd -d data.tar.zst -o data.tar && tar xf data.tar
+        fi
+        FOUND=$(find "$TMPT" -name 'libtalloc.so.2*' -type f | head -1)
+        if [ -n "$FOUND" ]; then
+            cp "$FOUND" "$TALLOC_LIB"
+            chmod 755 "$TALLOC_LIB"
+            echo "✓ Installed libtalloc.so.2 → jniLibs ($(du -h "$TALLOC_LIB" | cut -f1))"
+        else
+            echo "::warning::libtalloc.so.2 not found in package — proot may fail to link"
+        fi
+        cd "$PROJECT_ROOT"
+    else
+        echo "::warning::Could not download libtalloc — proot may fail to link"
+    fi
+    rm -rf "$TMPT"
+else
+    echo "✓ libtalloc.so.2 already present in jniLibs"
+fi
+
 echo ""
 echo "Assets ready in: $ASSETS_DIR"
 ls -lh "$ASSETS_DIR"
