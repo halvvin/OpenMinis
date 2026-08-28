@@ -219,10 +219,7 @@ object DeepLinkHandler {
                     DeepLinkAction.OpenSettingsScreen(Routes.ENV_VARS)
                 }
             }
-            // [T-new-sections-deeplink] Routes for the fork's new sections —
-            // also lets the emulator smoke-test deep-link straight into them.
-            "smart-browser", "smart_browser", "browser" ->
-                DeepLinkAction.OpenSettingsScreen(Routes.BROWSER)
+            // [T-new-sections-deeplink] Routes for the fork's new sections.
             "automation" -> DeepLinkAction.OpenSettingsScreen(Routes.AUTOMATION)
             "automation-alwayson", "alwayson" -> DeepLinkAction.OpenSettingsScreen(Routes.ALWAYS_ON)
             "automation-termux", "termux" -> DeepLinkAction.OpenSettingsScreen(Routes.TERMUX)

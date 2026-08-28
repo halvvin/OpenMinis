@@ -99,8 +99,6 @@ fun SettingsScreen(
     onAutomationClick: () -> Unit = {},
     // [T-cloud-sync] Personal WebDAV cloud sync row.
     onCloudSyncClick: () -> Unit = {},
-    // [T-browser-windows] Smart-browser persistent windows row.
-    onBrowserWindowsClick: () -> Unit = {},
     onPermissionsClick: () -> Unit = {},
     onUsageClick: () -> Unit = {},
     onAppearanceClick: () -> Unit = {},
@@ -216,14 +214,6 @@ fun SettingsScreen(
                     title = "موتور ادامه خودکار",
                     subtitle = "ادامه‌ی خودکار وظایف ناتمام پس از خطا / قطعی",
                     onClick = onKeepWorkingClick,
-                )
-                // [T-browser-tabs] Smart browser (§3).
-                SettingsItem(
-                    icon = Icons.Outlined.Language,
-                    iconColor = Color(0xFF0A84FF),
-                    title = "مرورگر هوشمند",
-                    subtitle = "تب‌های چندگانه + چت AI کنار صفحه، ماندگار",
-                    onClick = onBrowserWindowsClick,
                 )
                 // [T-automation-hub] Automation & agents (§8).
                 SettingsItem(

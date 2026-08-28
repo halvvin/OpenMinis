@@ -163,8 +163,6 @@ object Routes {
     const val AGENT_MANAGER = "automation_agents"
     /** [T-cloud-sync] Personal WebDAV cloud sync. */
     const val CLOUD_SYNC = "cloud_sync"
-    /** [T-browser-windows] Persistent smart-browser windows (§3). */
-    const val BROWSER = "smart_browser"
     const val MEMORY_FILE_EDIT = "memory_file/{fileName}/{isGlobal}"
     const val PERMISSIONS = "permissions"
     /**
@@ -602,7 +600,6 @@ fun AppNavigation(
                 onKeepWorkingClick = { navController.safeNavigate(Routes.KEEP_WORKING) },
                 onAutomationClick = { navController.safeNavigate(Routes.AUTOMATION) },
                 onCloudSyncClick = { navController.safeNavigate(Routes.CLOUD_SYNC) },
-                onBrowserWindowsClick = { navController.safeNavigate(Routes.BROWSER) },
                 onPermissionsClick = { navController.safeNavigate(Routes.PERMISSIONS) },
                 onUsageClick = { navController.safeNavigate(Routes.USAGE_STATS) },
                 onAppearanceClick = { navController.safeNavigate(Routes.APPEARANCE) },
@@ -1201,13 +1198,6 @@ fun AppNavigation(
         // [T-cloud-sync] Personal WebDAV sync.
         composable(Routes.CLOUD_SYNC) {
             com.openminis.app.ui.settings.CloudSyncScreen(
-                onBack = { navController.safePopBackStack() },
-            )
-        }
-
-        // [T-browser-tabs] Smart browser with Chrome-style tabs + per-tab AI panel.
-        composable(Routes.BROWSER) {
-            com.openminis.app.ui.browser.BrowserScreen(
                 onBack = { navController.safePopBackStack() },
             )
         }
