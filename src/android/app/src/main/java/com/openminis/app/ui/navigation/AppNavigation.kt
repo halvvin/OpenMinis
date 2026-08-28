@@ -455,46 +455,30 @@ fun AppNavigation(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
-    ) {
-        //   - exit uses EmphasizedAccelerate (cubic-bezier 0.3, 0.0, 0.8, 0.15)
-        //     so the leaving destination clears out fast
-        //   - both legs together feel like a single 300ms motion (200ms
-        //     exit overlapping 300ms enter), short enough that a rapid second
-        //     tap still lands on the next destination once safeNavigate's
-        //     RESUMED guard releases
-        //   - the small slide distance (~SlideDirection default ≈ container
-        //     width ÷ N — Compose's slideIntoContainer already picks a
-        //     subtle distance) plus fade reads as a single coordinated
-        //     motion rather than a hard cut, matching Settings/Files in
-        //     Material You system apps.
-        // RESUMED guard via safeNavigate + the colorScheme.background
-        // modifier above (T333) still defend against rapid-tap white
-        // flashes; the slightly longer enter spec (300ms vs 220ms) is
-        // covered by the same guard.
-        enterTransition = {
-            slideIntoContainer(
-                AnimatedContentTransitionScope.SlideDirection.Start,
-                animationSpec = tween(300, easing = EmphasizedDecelerate),
-            ) + fadeIn(animationSpec = tween(300, easing = EmphasizedDecelerate))
-        },
-        exitTransition = {
-            slideOutOfContainer(
-                AnimatedContentTransitionScope.SlideDirection.Start,
-                animationSpec = tween(200, easing = EmphasizedAccelerate),
-            ) + fadeOut(animationSpec = tween(200, easing = EmphasizedAccelerate))
-        },
-        popEnterTransition = {
-            slideIntoContainer(
-                AnimatedContentTransitionScope.SlideDirection.End,
-                animationSpec = tween(300, easing = EmphasizedDecelerate),
-            ) + fadeIn(animationSpec = tween(300, easing = EmphasizedDecelerate))
-        },
-        popExitTransition = {
-            slideOutOfContainer(
-                AnimatedContentTransitionScope.SlideDirection.End,
-                animationSpec = tween(200, easing = EmphasizedAccelerate),
-            ) + fadeOut(animationSpec = tween(200, easing = EmphasizedAccelerate))
-        },
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Start,
+                    animationSpec = tween(300, easing = EmphasizedDecelerate),
+                ) + fadeIn(animationSpec = tween(300, easing = EmphasizedDecelerate))
+            },
+            exitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Start,
+                    animationSpec = tween(200, easing = EmphasizedAccelerate),
+                ) + fadeOut(animationSpec = tween(200, easing = EmphasizedAccelerate))
+            },
+            popEnterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.End,
+                    animationSpec = tween(300, easing = EmphasizedDecelerate),
+                ) + fadeIn(animationSpec = tween(300, easing = EmphasizedDecelerate))
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.End,
+                    animationSpec = tween(200, easing = EmphasizedAccelerate),
+                ) + fadeOut(animationSpec = tween(200, easing = EmphasizedAccelerate))
+            },
     ) {
         composable(Routes.SESSION_LIST) {
             SessionListScreen(
