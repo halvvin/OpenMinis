@@ -1327,6 +1327,7 @@ fun AppNavigation(
                 },
             )
         }
+        } // ← closes NavHost content lambda
         // [T-floating-assistant] Smart Assistant floating window overlay.
         com.openminis.app.ui.floating.FloatingAssistantOverlay(
             viewModel = remember { com.openminis.app.ui.floating.FloatingAssistantViewModel(context.applicationContext, providerRepository) },
