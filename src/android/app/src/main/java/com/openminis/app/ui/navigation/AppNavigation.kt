@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -446,23 +447,18 @@ fun AppNavigation(
         quickActionStart != null -> quickActionStart
         else -> Routes.SESSION_LIST
     }
-    NavHost(
-        navController = navController,
-        startDestination = startDestination,
-        // T153: paint the in-app theme color underneath every transition
-        // frame. Without this the NavHost's transition surface is
-        // transparent and the window background bleeds through during
-        // enter/exit animations — on dark mode the base Light window
-        // background flashes white between screens. Tying the host to
-        // the active Material colorScheme also keeps the first frame
-        // correct on cold start.
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        // T342: Material 3 motion — shared-axis X transition.
-        // Spec (m3.material.io/styles/motion/transitions):
-        //   - enter uses EmphasizedDecelerate (cubic-bezier 0.05, 0.7, 0.1, 1.0)
-        //     so the new destination eases in confidently
+    Box(modifier = Modifier.fillMaxSize()) {
+        NavHost(
+            navController = navController,
+            startDestination = startDestination,
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+            enterTransition = { slideInHorizontally(initialOffsetX = { it / 4 }) + fadeIn(tween(animMs)) },
+            exitTransition = { slideOutHorizontally(targetOffsetX = { -it / 4 }) + fadeOut(tween(animMs)) },
+            popEnterTransition = { slideInHorizontally(initialOffsetX = { -it / 4 }) + fadeIn(tween(animMs)) },
+            popExitTransition = { slideOutHorizontally(targetOffsetX = { it / 4 }) + fadeOut(tween(animMs)) },
+    ) {
         //   - exit uses EmphasizedAccelerate (cubic-bezier 0.3, 0.0, 0.8, 0.15)
         //     so the leaving destination clears out fast
         //   - both legs together feel like a single 300ms motion (200ms
@@ -1344,5 +1340,10 @@ fun AppNavigation(
                 },
             )
         }
+        // [T-floating-assistant] Smart Assistant floating window overlay.
+        com.openminis.app.ui.floating.FloatingAssistantOverlay(
+            viewModel = remember { com.openminis.app.ui.floating.FloatingAssistantViewModel(context.applicationContext, providerRepository) },
+            providerRepository = providerRepository,
+        )
     }
 }

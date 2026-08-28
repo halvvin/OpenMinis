@@ -83,6 +83,34 @@ class AutomationPrefs private constructor(context: Context) {
         get() = prefs.getInt(KEY_FP_H, 380)
         set(v) = prefs.edit().putInt(KEY_FP_H, v).apply()
 
+    // ── Smart Assistant floating window ─────────────────────────────────
+    /** Master switch for the floating assistant (default ON — core feature). */
+    var assistantEnabled: Boolean
+        get() = prefs.getBoolean(KEY_FA_ENABLED, true)
+        set(v) = prefs.edit().putBoolean(KEY_FA_ENABLED, v).apply()
+
+    /** Whether the assistant panel is currently expanded. */
+    var assistantOpen: Boolean
+        get() = prefs.getBoolean(KEY_FA_OPEN, false)
+        set(v) = prefs.edit().putBoolean(KEY_FA_OPEN, v).apply()
+
+    var assistantX: Float
+        get() = prefs.getFloat(KEY_FA_X, 0f)
+        set(v) = prefs.edit().putFloat(KEY_FA_X, v).apply()
+    var assistantY: Float
+        get() = prefs.getFloat(KEY_FA_Y, 300f)
+        set(v) = prefs.edit().putFloat(KEY_FA_Y, v).apply()
+    var assistantW: Int
+        get() = prefs.getInt(KEY_FA_W, 340)
+        set(v) = prefs.edit().putInt(KEY_FA_W, v).apply()
+    var assistantH: Int
+        get() = prefs.getInt(KEY_FA_H, 460)
+        set(v) = prefs.edit().putInt(KEY_FA_H, v).apply()
+    /** Last selected model entry id inside the floating assistant. */
+    var assistantModelEntryId: String
+        get() = prefs.getString(KEY_FA_MODEL, "") ?: ""
+        set(v) = prefs.edit().putString(KEY_FA_MODEL, v).apply()
+
     // ── Always-On server config ──────────────────────────────────────────
     fun loadAlwaysOn(): AlwaysOnConfig = AlwaysOnConfig(
         serverType = prefs.getString(KEY_AO_TYPE, "vps") ?: "vps",
@@ -151,6 +179,13 @@ class AutomationPrefs private constructor(context: Context) {
         private const val KEY_FP_Y = "fp.y"
         private const val KEY_FP_W = "fp.w"
         private const val KEY_FP_H = "fp.h"
+        private const val KEY_FA_ENABLED = "fa.enabled"
+        private const val KEY_FA_OPEN = "fa.open"
+        private const val KEY_FA_X = "fa.x"
+        private const val KEY_FA_Y = "fa.y"
+        private const val KEY_FA_W = "fa.w"
+        private const val KEY_FA_H = "fa.h"
+        private const val KEY_FA_MODEL = "fa.model"
 
         @Volatile private var instance: AutomationPrefs? = null
 
