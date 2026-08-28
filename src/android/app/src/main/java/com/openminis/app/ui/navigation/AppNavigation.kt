@@ -159,6 +159,7 @@ object Routes {
     const val KEEP_WORKING = "keep_working"
     /** [T-automation-hub] Automation & agents hub (§8). */
     const val AUTOMATION = "automation"
+    const val ASSISTANT = "assistant"
     const val ALWAYS_ON = "automation_alwayson"
     const val TERMUX = "automation_termux"
     const val AGENT_MANAGER = "automation_agents"
@@ -595,6 +596,7 @@ fun AppNavigation(
                 onProfileClick = { navController.safeNavigate(Routes.USER_PROFILE) },
                 onKeepWorkingClick = { navController.safeNavigate(Routes.KEEP_WORKING) },
                 onAutomationClick = { navController.safeNavigate(Routes.AUTOMATION) },
+                onAssistantClick = { navController.safeNavigate(Routes.ASSISTANT) },
                 onCloudSyncClick = { navController.safeNavigate(Routes.CLOUD_SYNC) },
                 onPermissionsClick = { navController.safeNavigate(Routes.PERMISSIONS) },
                 onUsageClick = { navController.safeNavigate(Routes.USAGE_STATS) },
@@ -1173,6 +1175,11 @@ fun AppNavigation(
                 onAlwaysOnClick = { navController.safeNavigate(Routes.ALWAYS_ON) },
                 onTermuxClick = { navController.safeNavigate(Routes.TERMUX) },
                 onAgentManagerClick = { navController.safeNavigate(Routes.AGENT_MANAGER) },
+            )
+        }
+        composable(Routes.ASSISTANT) {
+            com.openminis.app.ui.settings.AssistantSettingsScreen(
+                onBack = { navController.safePopBackStack() },
             )
         }
         composable(Routes.ALWAYS_ON) {

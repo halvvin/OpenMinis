@@ -97,6 +97,8 @@ fun SettingsScreen(
     onKeepWorkingClick: () -> Unit = {},
     // [T-automation-hub] Automation & agents hub row.
     onAutomationClick: () -> Unit = {},
+    // [T-floating-assistant] Smart Assistant floating window row.
+    onAssistantClick: () -> Unit = {},
     // [T-cloud-sync] Personal WebDAV cloud sync row.
     onCloudSyncClick: () -> Unit = {},
     onPermissionsClick: () -> Unit = {},
@@ -222,6 +224,14 @@ fun SettingsScreen(
                     title = "اتوماسیون و ایجنت‌ها",
                     subtitle = "اجرای همیشگی · Termux · مدیریت ایجنت‌ها",
                     onClick = onAutomationClick,
+                )
+                // [T-floating-assistant] Smart Assistant floating window (§21).
+                SettingsItem(
+                    icon = Icons.Outlined.SmartToy,
+                    iconColor = Color(0xFF30D158),
+                    title = "دستیار شناور هوشمند",
+                    subtitle = "پنجره‌ی شناور برای چت با هر مدل و اجرای کارها روی گوشی",
+                    onClick = onAssistantClick,
                 )
                 // [T-cloud-sync] Personal WebDAV sync.
                 SettingsItem(
