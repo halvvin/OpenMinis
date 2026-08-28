@@ -5730,9 +5730,32 @@ class ChatViewModel(
     private fun keepWorkingOnTaskCompleted() {
         try {
             val prefs = keepWorkingPrefs()
-            // [FIX-4] Per-session counters: a successful turn in ANY session
-            // clears that session's own task state — no cross-chat race.
-            prefs.resetTaskState(realSessionId.ifEmpty { sessionId })
+            val config = prefs.load()
+            if (!config.enabled) return
+            val sid = realSessionId.ifEmpty { sessionId }
+            if (sid.isEmpty()) return
+            // [FIX-KEEP-WORKING] Don't stop on first success — schedule the
+            // NEXT continuation so the engine keeps 'working' until the task
+            // is truly done or maxAttempts is reached. The user expects:
+            // "باید چند پیام بزند برای انجام کار".
+            val attempt = prefs.attemptsFor(sid) + 1
+            if (attempt > config.maxAttempts) {
+                appendSystemInfo(
+                    text = "⛔ موتور ادامه خودکار: حداکثر تلاش‌ها (${config.maxAttempts}) به پایان رسید.",
+                    iconKind = "error",
+                )
+                prefs.resetTaskState(sid)
+                return
+            }
+            prefs.setAttemptsFor(sid, attempt)
+            appendSystemInfo(
+                text = "🔄 موتور ادامه خودکار: ادامه کار — تلاش $attempt از ${config.maxAttempts} پس از ${describeInterval(config.intervalSeconds)}…",
+                iconKind = "autorenew",
+            )
+            viewModelScope.launch {
+                delay(config.intervalSeconds * 1000L)
+                sendMessage(config.command, skipContextCheck = true)
+            }
         } catch (_: Exception) { /* never break the chat path */ }
     }
 
