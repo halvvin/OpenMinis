@@ -63,6 +63,7 @@ import com.openminis.app.tools.WebExtractTool
 import com.openminis.app.tools.OcrTool
 import com.openminis.app.tools.WebSearchTool
 import com.openminis.app.tools.FileSearchTool
+import com.openminis.app.tools.ArchiveTool
 import com.openminis.app.tools.FileReadTool
 import com.openminis.app.tools.FileWriteTool
 import com.openminis.app.tools.MemoryTools
@@ -8275,6 +8276,7 @@ class ChatViewModel(
             OcrTool.NAME -> OcrTool.execute(argsJson, context)
             WebSearchTool.NAME -> WebSearchTool.execute(argsJson, context)
             FileSearchTool.NAME -> FileSearchTool.execute(argsJson, context)
+            ArchiveTool.NAME -> ArchiveTool.execute(argsJson, context)
             // T178: pass sessionId + context so read_image routes through
             // resolveSessionHostPath like file_read/write/edit do — without
             // these, the tool consults the global last-writer-wins
@@ -11341,6 +11343,7 @@ Only invoke these tools when the user explicitly asks you to interact with anoth
         "ocr_image" -> "OCR Image"
         "web_search" -> "Search Web"
         "search_files" -> "Search Files"
+        "archive" -> "Archive Tools"
         "web_search" -> "Search Web"
         else -> toolName
             .split('_')
