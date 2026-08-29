@@ -195,6 +195,10 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    // [T-floating-system] Foreground Service + SavedStateRegistryOwner for the
+    // system-wide floating assistant (ComposeView hosted by a Service).
+    implementation("androidx.lifecycle:lifecycle-service:2.8.7")
+    implementation("androidx.savedstate:savedstate-ktx:1.2.1")
     // ProcessLifecycleOwner — used by XAIOAuthManager to detect Custom
     // Tab dismissal (T-xai-oauth-stop-resume port iOS d1dbdd5d).
     implementation("androidx.lifecycle:lifecycle-process:2.8.7")

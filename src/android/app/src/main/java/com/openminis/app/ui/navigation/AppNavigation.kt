@@ -1330,10 +1330,5 @@ fun AppNavigation(
             )
         }
         } // ← closes NavHost content lambda
-        // [T-floating-assistant] Smart Assistant floating window overlay.
-        FloatingAssistantOverlay(
-            viewModel = remember { FloatingAssistantViewModel(context.applicationContext, providerRepository) },
-            providerRepository = providerRepository,
-        )
     }
 }

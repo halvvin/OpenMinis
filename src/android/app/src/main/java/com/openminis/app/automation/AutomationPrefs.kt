@@ -81,7 +81,7 @@ class AutomationPrefs private constructor(context: Context) {
     // ── Smart Assistant floating window ─────────────────────────────────
     /** Master switch for the floating assistant (default ON — core feature). */
     var assistantEnabled: Boolean
-        get() = prefs.getBoolean(KEY_FA_ENABLED, true)
+        get() = prefs.getBoolean(KEY_FA_ENABLED, false)
         set(v) = prefs.edit().putBoolean(KEY_FA_ENABLED, v).apply()
 
     // ── [T-execution-modes] Execution mode (0=AUTO, 1=PLANNING, 2=ACCEPT) ──

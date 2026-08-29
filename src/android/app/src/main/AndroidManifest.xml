@@ -444,6 +444,19 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
+        <!-- [T-floating-system] System-wide floating assistant — WindowManager
+             overlay so the bubble + panel float over ALL apps. Requires
+             SYSTEM_ALERT_WINDOW (declared above) + overlay permission. -->
+        <service
+            android:name=".ui.floating.FloatingAssistantService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating_assistant_overlay" />
+        </service>
+
         <!-- Alarm broadcast receiver (also handles BOOT_COMPLETED for re-scheduling) -->
         <receiver
             android:name=".offload.AlarmReceiver"

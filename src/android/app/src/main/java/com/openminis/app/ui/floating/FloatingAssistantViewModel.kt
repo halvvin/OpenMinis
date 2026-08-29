@@ -29,7 +29,7 @@ data class AssistantMessage(
 
 class FloatingAssistantViewModel(
     private val appContext: Context,
-    private val providerRepo: ProviderRepository,
+    private val providerRepo: ProviderRepository?,
 ) : ViewModel() {
 
     private val prefs: AutomationPrefs = AutomationPrefs.get(appContext)
@@ -47,18 +47,22 @@ class FloatingAssistantViewModel(
 
     init {
         viewModelScope.launch {
-            providerRepo.configLoaded.collect { loaded ->
-                if (loaded) loadModels()
+            if (providerRepo != null) {
+                providerRepo.configLoaded.collect { loaded ->
+                    if (loaded) loadModels()
+                }
             }
         }
     }
 
     fun loadModels() {
+        // [T-floating-system] repo may be null before MinisApp finishes init.
+        val repo = providerRepo ?: return
         // Same fallback rule as the browser: Agent Loop entries first, else ALL
         // enabled-provider entries (grouped per API in the UI).
-        val loop = runCatching { providerRepo.resolvedAgentLoopEntries() }.getOrDefault(emptyList())
+        val loop = runCatching { repo.resolvedAgentLoopEntries() }.getOrDefault(emptyList())
         val all = runCatching {
-            val cfg = providerRepo.config.value
+            val cfg = repo.config.value
             val enabled = cfg.instances.filter { it.isEnabled }.map { it.id }.toSet()
             cfg.modelEntries.filter { it.providerInstanceId in enabled && !it.isHidden }
         }.getOrDefault(emptyList())
@@ -79,6 +83,11 @@ class FloatingAssistantViewModel(
     fun send(text: String) {
         val t = text.trim()
         if (t.isEmpty() || busy.value) return
+        val repo = providerRepo
+        if (repo == null) {
+            appendAssistant("❌ سرویس‌های مدل هنوز آماده نیستند — کمی بعد دوباره تلاش کن.")
+            return
+        }
         messages.value = messages.value + AssistantMessage("user", t)
         val entry = selectedEntry.value
         if (entry == null) {
@@ -89,8 +98,8 @@ class FloatingAssistantViewModel(
         viewModelScope.launch {
             val reply = withContext(Dispatchers.IO) {
                 runCatching {
-                    val instance = providerRepo.instance(entry.providerInstanceId)
-                    val apiKey = instance?.let { providerRepo.usableApiKey(it) }
+                    val instance = repo.instance(entry.providerInstanceId)
+                    val apiKey = instance?.let { repo.usableApiKey(it) }
                     if (instance == null || apiKey == null) {
                         "❌ کلید API برای «${entry.model.displayName}» در دسترس نیست — تنظیمات → Providers را چک کن."
                     } else {
