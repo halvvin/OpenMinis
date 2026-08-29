@@ -516,9 +516,13 @@ class PersistentShell(
             }
 
             if (result == null) {
-                // Timeout — cancel pending, but don't kill the shell
+                // Timeout — cancel pending. [FIX-4] Also destroy the PTY and
+                // restart the shell so a long-running/timed-out command cannot
+                // keep writing into the buffer and POISON the next command's
+                // output (output poisoning across commands in one session).
                 pendingCallback = null
-                Pair("[Command timed out after ${timeout / 1000}s]", 124)
+                restartShell()
+                Pair("[Command timed out after ${timeout / 1000}s — shell restarted]", 124)
             } else {
                 result
             }
@@ -575,5 +579,25 @@ class PersistentShell(
         }
         pendingCallback = null
         Log.i(TAG, "Persistent shell stopped")
+    }
+
+    /** [FIX-4] Restart the shell process from scratch (used after timeout to
+     *  prevent output poisoning — a stale PTY left running writes its leftover
+     *  output into the next command's stream). */
+    private fun restartShell() {
+        Log.i(TAG, "Restarting persistent shell")
+        // Stop the old process (do NOT fire pendingCallback again — already
+        // cleared in the timeout branch).
+        try { stdinWriter?.close() } catch (_: Exception) {}
+        stdinWriter = null
+        process?.destroyForcibly()
+        process = null
+        // Reset the start gate so ensureStarted() runs fresh.
+        isStarting.set(false)
+        // Launch a new shell on a background thread so the caller (still
+        // inside executeCommand on Dispatchers.IO) can return immediately.
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try { ensureStarted() } catch (_: Exception) {}
+        }
     }
 }

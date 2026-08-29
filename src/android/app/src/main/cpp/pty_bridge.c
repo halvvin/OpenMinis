@@ -49,6 +49,15 @@ Java_com_openminis_app_sandbox_PtyBridge_forkExec(
         argv[i] = strdup(cs ? cs : "");
         (*env)->ReleaseStringUTFChars(env, s, cs);
         (*env)->DeleteLocalRef(env, s);
+        // [FIX-5] strdup can fail under memory pressure — a NULL argv[i]
+        // handed to execve segfaults the whole app. Free what we allocated
+        // so far (no leak) and bail with ENOMEM.
+        if (argv[i] == NULL) {
+            for (jsize j = 0; j < i; j++) free(argv[j]);
+            free(argv);
+            (*env)->ReleaseStringUTFChars(env, jCmd, cmd);
+            return -ENOMEM;
+        }
     }
     argv[argc] = NULL;
 
@@ -67,6 +76,15 @@ Java_com_openminis_app_sandbox_PtyBridge_forkExec(
         envp[i] = strdup(cs ? cs : "");
         (*env)->ReleaseStringUTFChars(env, s, cs);
         (*env)->DeleteLocalRef(env, s);
+        // [FIX-5] Same NULL guard as argv — avoid execve segfault + leak.
+        if (envp[i] == NULL) {
+            for (jsize j = 0; j < argc; j++) free(argv[j]);
+            free(argv);
+            for (jsize j = 0; j < i; j++) free(envp[j]);
+            free(envp);
+            (*env)->ReleaseStringUTFChars(env, jCmd, cmd);
+            return -ENOMEM;
+        }
     }
     envp[envc] = NULL;
 

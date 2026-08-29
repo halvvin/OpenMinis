@@ -12,6 +12,7 @@ import com.openminis.app.data.FileMentionIndex
 import com.openminis.app.data.MountedFoldersStore
 import java.io.File
 import java.util.TimeZone
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.abs
 
 /**
@@ -42,10 +43,25 @@ object PRootKernel {
     private lateinit var rootfsManager: RootfsManager
 
     /** Custom environment variables injected into every proot command. */
-    val customEnvironment: MutableMap<String, String> = mutableMapOf()
+    val customEnvironment: MutableMap<String, String> = ConcurrentHashMap()
 
-    /** Bind mounts: Linux path -> host filesystem path. */
-    val bindMounts: MutableMap<String, String> = linkedMapOf()
+    // [FIX-2/3] Thread-safe bind mounts. The old `linkedMapOf()` was not
+    // safe for concurrent access (ConcurrentModificationException under load),
+    // and `resolveHostPath` re-sorted the keys on EVERY call (CPU/GC churn).
+    // Now: writes go through synchronized methods that also refresh a cached
+    // longest-first path list; reads (`bindMounts` view + resolveHostPath)
+    // use the cache — sorting happens once per write, not once per read.
+    private val _bindMounts = ConcurrentHashMap<String, String>()
+
+    /** Read-only snapshot view of bind mounts (Linux path -> host path). */
+    val bindMounts: Map<String, String> get() = _bindMounts
+
+    @Volatile
+    private var sortedMountPaths: List<String> = emptyList()
+
+    private fun refreshSortedMountPaths() {
+        sortedMountPaths = _bindMounts.keys.sortedByDescending { it.length }
+    }
 
     /**
      * Initialize the PRoot environment: install rootfs and proot binary.
@@ -179,8 +195,14 @@ object PRootKernel {
     }
 
     fun addBindMount(linuxPath: String, hostPath: String) {
-        bindMounts[linuxPath] = hostPath
+        synchronized(this) {
+            _bindMounts[linuxPath] = hostPath
+            refreshSortedMountPaths()
+        }
     }
+
+    /** Read-only snapshot of all currently registered global bind mounts. */
+    fun getGlobalMounts(): Map<String, String> = _bindMounts.toMap()
 
     /**
      * Register the global (session-independent) Minis bind mounts so direct
@@ -195,16 +217,22 @@ object PRootKernel {
         // servers.json the Android Settings UI does (host: minis-global/mcp-servers).
         listOf("memory", "skills", "shared", "mcp-servers").forEach { subdir ->
             val hostDir = File(globalBase, subdir).also { it.mkdirs() }
-            bindMounts["/var/minis/$subdir"] = hostDir.absolutePath
+            addBindMount("/var/minis/$subdir", hostDir.absolutePath)
         }
     }
 
     fun removeBindMount(linuxPath: String) {
-        bindMounts.remove(linuxPath)
+        synchronized(this) {
+            _bindMounts.remove(linuxPath)
+            refreshSortedMountPaths()
+        }
     }
 
     fun clearBindMounts() {
-        bindMounts.clear()
+        synchronized(this) {
+            _bindMounts.clear()
+            sortedMountPaths = emptyList()
+        }
     }
 
     // ── User-mounted external folders (T219) ──────────────────────────────
@@ -258,11 +286,11 @@ object PRootKernel {
         val stale = bindMounts.keys
             .filter { it.startsWith(MOUNTS_LINUX_PREFIX) }
             .filter { it !in desired }
-        for (key in stale) bindMounts.remove(key)
+        for (key in stale) removeBindMount(key)
 
         // Add or update.
         for ((linuxPath, hostPath) in desired) {
-            bindMounts[linuxPath] = hostPath
+            addBindMount(linuxPath, hostPath)
         }
 
         // T219-6: PRoot's `-b host:linux` requires the linux target to exist
@@ -689,11 +717,10 @@ object PRootKernel {
      * Returns null if no matching mount is found.
      */
     fun resolveHostPath(linuxPath: String): File? {
-        // Check bind mounts (longest prefix match)
-        val sorted = bindMounts.keys.sortedByDescending { it.length }
-        for (mountPoint in sorted) {
+        // Check bind mounts (longest prefix match using cached sorted list)
+        for (mountPoint in sortedMountPaths) {
             if (linuxPath == mountPoint || linuxPath.startsWith("$mountPoint/")) {
-                val hostBase = bindMounts[mountPoint]!!
+                val hostBase = _bindMounts[mountPoint]!!
                 val relativePath = linuxPath.removePrefix(mountPoint).removePrefix("/")
                 return if (relativePath.isEmpty()) {
                     File(hostBase)
