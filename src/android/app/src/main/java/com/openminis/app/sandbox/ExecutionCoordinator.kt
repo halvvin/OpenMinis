@@ -176,6 +176,7 @@ object ExecutionCoordinator {
         // the "file disappears after first download" bug)
         val prevAttachments = PRootKernel.bindMounts["/var/minis/attachments"]
 
+        // Session-specific directories
         // Session-specific directories: write ONLY to the local `mounts` map
         // (returned to PersistentShell for proot -b argv). Do NOT call
         // PRootKernel.addBindMount — that pollutes the global map with
@@ -191,8 +192,16 @@ object ExecutionCoordinator {
         Log.w(TAG, "[diag] buildSessionBindMounts sessionId=$sessionId " +
             "attachments: prev=$prevAttachments new=${mounts["/var/minis/attachments"]}")
 
-        // Global shared directories — these ARE safe to register globally
-        // (shared across all sessions, no per-session overwrite).
+        // Global shared directories.
+        // [T-android-mcp-bind-mount] mcp-servers MUST be here, not only in
+        // PRootKernel.registerGlobalBindMounts: PersistentShell builds PRoot's
+        // `-b` argv from THIS map, so a subdir missing here is invisible to the
+        // shell that runs minis-mcp-cli — /var/minis/mcp-servers/servers.json
+        // then resolves to the empty rootfs placeholder and `minis-mcp-cli list`
+        // returns {"servers": [], "count": 0} even though the UI wrote the
+        // server (the UI / debug.ls read via resolveHostPath, a separate map,
+        // which is why they disagreed). Same trap as the external-mounts note
+        // below.
         val globalBase = File(filesDir, "minis-global")
         listOf("memory", "skills", "shared", "mcp-servers").forEach { subdir ->
             val hostDir = File(globalBase, subdir).also { it.mkdirs() }
@@ -203,7 +212,8 @@ object ExecutionCoordinator {
 
         // T277: user-mounted external folders (SAF-picked trees). PersistentShell
         // uses this map verbatim as PRoot's `-b` argv, so any mount missing here
-        // is invisible to the shell. PRootKernel.bindMounts is kept in
+        // is invisible to the shell — `ls /var/minis/mounts/<name>/` then shows
+        // only the empty rootfs placeholder. PRootKernel.bindMounts is kept in
         // sync separately by applyMountedFoldersSnapshot for the resolveHostPath
         // path (debug.ls, file_read, …) but does NOT feed the live PRoot argv.
         // Skip entries whose SAF tree URI didn't decode to a POSIX path

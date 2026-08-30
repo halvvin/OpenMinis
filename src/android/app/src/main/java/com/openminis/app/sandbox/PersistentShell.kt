@@ -587,8 +587,6 @@ class PersistentShell(
      *  output into the next command's stream). */
     private fun restartShell() {
         Log.i(TAG, "Restarting persistent shell")
-        // Stop the old process (do NOT fire pendingCallback again — already
-        // cleared in the timeout branch).
         try { stdinWriter?.close() } catch (_: Exception) {}
         stdinWriter = null
         process?.destroyForcibly()

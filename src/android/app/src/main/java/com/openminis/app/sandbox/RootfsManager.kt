@@ -39,7 +39,36 @@ sealed class RootfsInstallState {
  */
 class RootfsManager private constructor(private val context: Context) {
 
-    val rootfsDir: File = File(context.filesDir, "alpine-rootfs")
+    // [T-user-batch-1] Rootfs location preference. When "external" is chosen the
+    // rootfs lives in getExternalFilesDir("alpine-rootfs") instead of internal
+    // filesDir. The getter resolves DYNAMICALLY on every access so that:
+    //  1. after a successful move, every consumer (PRootKernel, tools, storage
+    //     screens) automatically sees the new location with no restart dance;
+    //  2. if the SD card is removed while external is preferred, we silently
+    //     fall back to the internal path — the app never crashes and never
+    //     points at a dead directory (it just finds the rootfs missing there,
+    //     which isInstalled reports, and install/move can restore it).
+    private val locationPrefs =
+        context.getSharedPreferences("rootfs_location", Context.MODE_PRIVATE)
+
+    val rootfsDir: File
+        get() {
+            if (locationPrefs.getBoolean("use_external", false)) {
+                val ext = context.getExternalFilesDir(null)
+                if (ext != null && ext.exists()) return File(ext, "alpine-rootfs")
+                // External volume unavailable → fall back to internal.
+            }
+            return File(context.filesDir, "alpine-rootfs")
+        }
+    /**
+     * Preferred external location for rootfs when user selects "External".
+     * Uses getExternalFilesDir("rootfs") – this directory lives on the
+     * primary external storage (SD card if present, otherwise internal
+     * emulated storage). The path is guaranteed to exist when the
+     * permission WRITE_EXTERNAL_STORAGE (API <29) or scoped storage
+     * (API ≥29) is granted.
+     */
+    private val externalRootfsDir: File? get() = context.getExternalFilesDir(null)?.let { File(it, "alpine-rootfs") }
     val prootBinary: File = File(context.applicationInfo.nativeLibraryDir, "libproot.so")
 
     private val archFile: File get() = File(rootfsDir, ".arch")
@@ -65,6 +94,56 @@ class RootfsManager private constructor(private val context: Context) {
      * Progress is published to [installState] (Preparing → Extracting(f) →
      * Finalizing → Installed / Failed).
      */
+    /**
+     * Move rootfs to the chosen destination (internal or external).
+     * Atomic: copy to a staging dir in the target volume, verify byte-size,
+     * delete the source, then flip the location preference LAST so the
+     * dynamic [rootfsDir] getter switches over only after data is really
+     * there. On any failure the source stays untouched and the preference
+     * keeps its old value → no corruption, no lost path.
+     */
+    suspend fun moveRootfs(toExternal: Boolean): Boolean = withContext(Dispatchers.IO) {
+        val target = if (toExternal) externalRootfsDir ?: return@withContext false
+                     else File(context.filesDir, "alpine-rootfs")
+        val src = rootfsDir
+
+        // Already there?
+        if (src.absolutePath == target.absolutePath) {
+            locationPrefs.edit().putBoolean("use_external", toExternal).apply()
+            return@withContext true
+        }
+
+        try {
+            if (src.exists()) {
+                val staging = File(target.parentFile, "alpine-rootfs.moving")
+                if (staging.exists()) staging.deleteRecursively()
+                staging.mkdirs()
+                src.copyRecursively(staging, overwrite = true)
+                if (calculateDirSize(src) != calculateDirSize(staging)) {
+                    staging.deleteRecursively()
+                    return@withContext false
+                }
+                src.deleteRecursively()
+                if (!staging.renameTo(target)) {
+                    // Restore from staging rename failure: move staging back.
+                    staging.renameTo(src)
+                    return@withContext false
+                }
+            } else {
+                target.mkdirs()
+            }
+            locationPrefs.edit().putBoolean("use_external", toExternal).apply()
+            true
+        } catch (t: Throwable) {
+            Log.e(TAG, "moveRootfs(toExternal=$toExternal) failed", t)
+            File(target.parentFile, "alpine-rootfs.moving").deleteRecursively()
+            false
+        }
+    }
+
+    /** Which location is currently preferred (for UI radio state). */
+    fun prefersExternal(): Boolean = locationPrefs.getBoolean("use_external", false)
+
     suspend fun installIfNeeded() = withContext(Dispatchers.IO) {
         if (isInstalled) {
             Log.d(TAG, "Rootfs already installed at $rootfsDir")
@@ -170,10 +249,32 @@ class RootfsManager private constructor(private val context: Context) {
             )
         }
 
-        // No libtalloc staging: deps/build_proot.sh links talloc statically
-        // (the binary carries no DT_NEEDED for libtalloc.so), so there is no
-        // shared object to version-rename. Older builds shipped libtalloc.so
-        // in jniLibs and copied it here as libtalloc.so.2.
+        // [T-fix-libtalloc] The Termux proot binary is DYNAMICALLY linked
+        // against libtalloc.so.2 (DT_NEEDED). AGP only packages *.so files
+        // into lib/, so the talloc lib ships as libtalloc.so and is copied
+        // here as libtalloc.so.2 (the name the linker asks for). Without
+        // this, proot fails with: CANNOT LINK EXECUTABLE ".../libproot.so":
+        // library "libtalloc.so.2" not found.
+        //
+        // IMPORTANT: nativeLibraryDir (/data/app/.../lib/arm64/) is READ-ONLY
+        // on Android — the app CANNOT write there. Copy to the app's
+        // writable filesDir/native_libs instead, and LD_LIBRARY_PATH must
+        // include that directory (set in PRootKernel.boot).
+        try {
+            val nativeDir = File(context.applicationInfo.nativeLibraryDir)
+            val tallocSo = File(nativeDir, "libtalloc.so")
+            val localLibDir = File(context.filesDir, "native_libs").also { it.mkdirs() }
+            val tallocSo2 = File(localLibDir, "libtalloc.so.2")
+            if (tallocSo.exists() && !tallocSo2.exists()) {
+                tallocSo.copyTo(tallocSo2, overwrite = true)
+                tallocSo2.setExecutable(true, false)
+                Log.i(TAG, "Staged libtalloc.so.2 to internal storage: ${tallocSo2.absolutePath}")
+            } else if (tallocSo2.exists()) {
+                Log.d(TAG, "libtalloc.so.2 already present in internal storage")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "libtalloc staging failed: ${e.message} — proot may fail to link", e)
+        }
 
         Log.d(TAG, "PRoot binary available at $prootBinary")
     }

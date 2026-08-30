@@ -46,11 +46,9 @@ object PRootKernel {
     val customEnvironment: MutableMap<String, String> = ConcurrentHashMap()
 
     // [FIX-2/3] Thread-safe bind mounts. The old `linkedMapOf()` was not
-    // safe for concurrent access (ConcurrentModificationException under load),
-    // and `resolveHostPath` re-sorted the keys on EVERY call (CPU/GC churn).
-    // Now: writes go through synchronized methods that also refresh a cached
-    // longest-first path list; reads (`bindMounts` view + resolveHostPath)
-    // use the cache — sorting happens once per write, not once per read.
+    // safe for concurrent access, and `resolveHostPath` re-sorted keys on
+    // every call. Writes go through synchronized methods that refresh a
+    // cached longest-first path list; reads use the cache.
     private val _bindMounts = ConcurrentHashMap<String, String>()
 
     /** Read-only snapshot view of bind mounts (Linux path -> host path). */
@@ -201,9 +199,6 @@ object PRootKernel {
         }
     }
 
-    /** Read-only snapshot of all currently registered global bind mounts. */
-    fun getGlobalMounts(): Map<String, String> = _bindMounts.toMap()
-
     /**
      * Register the global (session-independent) Minis bind mounts so direct
      * file I/O tools (file_read, file_edit) can resolve
@@ -283,7 +278,7 @@ object PRootKernel {
         }
 
         // Remove stale /var/minis/mounts/* keys not in desired.
-        val stale = bindMounts.keys
+        val stale = _bindMounts.keys
             .filter { it.startsWith(MOUNTS_LINUX_PREFIX) }
             .filter { it !in desired }
         for (key in stale) removeBindMount(key)

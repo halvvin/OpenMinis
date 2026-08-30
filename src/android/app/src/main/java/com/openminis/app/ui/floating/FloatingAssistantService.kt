@@ -11,8 +11,9 @@ import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
-import androidx.lifecycle.ViewTreeLifecycleOwner
-import androidx.lifecycle.ViewTreeViewModelStoreOwner
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
@@ -85,8 +86,8 @@ class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner {
         }
         layoutParams = params
         floatingView = ComposeView(this).apply {
-            ViewTreeLifecycleOwner.set(this, service)
-            ViewTreeViewModelStoreOwner.set(this, service)
+            setViewTreeLifecycleOwner(service)
+            setViewTreeViewModelStoreOwner(service)
             this.setViewTreeSavedStateRegistryOwner(service)
             setContent {
                 val repo = service.providerRepository
