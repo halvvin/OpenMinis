@@ -11,7 +11,8 @@ import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
-import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
@@ -28,15 +29,18 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
  * The ComposeView inside uses Lifecycle + SavedStateRegistry so it survives
  * service restarts correctly.
  */
-class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner {
+class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner, ViewModelStoreOwner {
 
     private lateinit var windowManager: WindowManager
     private var floatingView: ComposeView? = null
     private lateinit var layoutParams: WindowManager.LayoutParams
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
+    private val _viewModelStore = ViewModelStore()
 
     override val savedStateRegistry: SavedStateRegistry
         get() = savedStateRegistryController.savedStateRegistry
+    override val viewModelStore: ViewModelStore
+        get() = _viewModelStore
 
     /** Lazy access to the app's ProviderRepository (set in MinisApp.onCreate). */
     private val providerRepository: com.openminis.app.data.repository.ProviderRepository?
@@ -123,6 +127,7 @@ class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner {
     override fun onDestroy() {
         super.onDestroy()
         floatingView?.let { windowManager.removeView(it) }
+        _viewModelStore.clear()
     }
 
     override fun onBind(intent: Intent): IBinder? {
