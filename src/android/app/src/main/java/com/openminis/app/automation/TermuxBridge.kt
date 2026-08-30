@@ -50,7 +50,7 @@ object TermuxBridge {
         context: Context,
         command: String,
         exchangeDir: String = "/sdcard/MinisFork",
-        timeoutMs: Long = 60_000L,
+        timeoutMs: Long = 120_000L,
     ): TermuxResult = withContext(Dispatchers.IO) {
         if (!isTermuxInstalled(context)) {
             return@withContext TermuxResult(false, "Termux نصب نیست — ابتدا Termux را از F-Droid نصب کن.")

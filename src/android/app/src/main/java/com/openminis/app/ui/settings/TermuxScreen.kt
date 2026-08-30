@@ -2,64 +2,43 @@ package com.openminis.app.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.openminis.app.automation.AutomationPrefs
 import com.openminis.app.automation.TermuxBridge
 import kotlinx.coroutines.launch
 
-/**
- * [T-termux-bridge] «یکپارچه‌سازی Termux» — user spec §8-2, rev2.
- *
- * Includes a real mini-terminal: a scrollable console with the session
- * history plus an input line (keyboard-aware via imePadding) that executes
- * inside Termux through the official RUN_COMMAND intent. Output round-trips
- * through the shared exchange directory.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TermuxScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val prefs = remember { AutomationPrefs.get(context) }
+    val keyboardController = LocalSoftwareKeyboardController.current
 
     var enabled by remember { mutableStateOf(false) }
     var exchangeDir by remember { mutableStateOf("/sdcard/MinisFork") }
@@ -72,30 +51,42 @@ fun TermuxScreen(onBack: () -> Unit) {
     var historyIdx by remember { mutableStateOf(-1) }
     var lastCmd by remember { mutableStateOf("") }
     var kbOn by remember { mutableStateOf(true) }
-    // Auto-open the keyboard when entering the terminal.
-    val focusRequester = remember { androidx.compose.ui.focus.FocusRequester() }
-    LaunchedEffect(loaded) { if (loaded) focusRequester.requestFocus() }
+
+    val focusRequester = remember { FocusRequester() }
+    val terminalScrollState = rememberScrollState()
 
     LaunchedEffect(Unit) {
         enabled = prefs.termuxEnabled
         exchangeDir = prefs.loadTermux().exchangeDir
         installed = TermuxBridge.isTermuxInstalled(context)
-        console = TermuxBridge.isTermuxInstalled(context)
-            .let { if (it) "Termux پیدا شد ✓ — دستور بنویس و اجرا کن.\n" else "Termux نصب نیست — راهنمای زیر را انجام بده.\n" }
+        console = if (installed) {
+            "Termux پیدا شد ✓ — دستور خود را تایپ کرده و اجرا کنید.\n"
+        } else {
+            "❌ Termux نصب نیست — طبق راهنمای انتهای صفحه عمل کنید.\n"
+        }
         loaded = true
     }
 
-    fun log(line: String) {
-        console = (console + line + "\n").takeLast(20_000)
+    // Auto-scroll to bottom on new output
+    LaunchedEffect(console) {
+        terminalScrollState.animateScrollTo(terminalScrollState.maxValue)
     }
 
-    fun run(cmd: String) {
+    fun log(line: String) {
+        console = (console + line + "\n").takeLast(30_000)
+    }
+
+    fun runCommand(cmd: String) {
         if (!enabled) {
-            log("❌ اول کلید «فعال» را روشن کن.")
+            log("❌ ابتدا سوئیچ «فعال‌سازی Termux» را روشن کنید.")
             return
         }
+        if (cmd.isBlank()) return
+        history.add(cmd)
+        historyIdx = -1
         lastCmd = cmd
-        log("\$ $cmd")
+        log("minis@termux:~$ $cmd")
+        command = ""
         testing = true
         scope.launch {
             val r = TermuxBridge.execute(context, cmd, exchangeDir, timeoutMs = 120_000L)
@@ -104,18 +95,13 @@ fun TermuxScreen(onBack: () -> Unit) {
         }
     }
 
-    fun runAndRemember(cmd: String) {
-        if (cmd.isNotBlank()) { history.add(cmd); historyIdx = -1 }
-        run(cmd)
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("یکپارچه‌سازی Termux") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "بازگشت")
                     }
                 },
             )
@@ -127,162 +113,213 @@ fun TermuxScreen(onBack: () -> Unit) {
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 12.dp, vertical = 8.dp)
                 .imePadding(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // ── Status row ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("فعال", style = MaterialTheme.typography.bodyLarge)
+                Column {
+                    Text("فعال‌سازی Termux", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (installed) "✅ Termux آماده استفاده است" else "❌ Termux یافت نشد",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (installed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    )
+                }
                 Switch(checked = enabled, onCheckedChange = {
-                    enabled = it
-                    prefs.termuxEnabled = it
+                    enabled = it; prefs.termuxEnabled = it
                 })
             }
 
-            Text(
-                if (installed) "✅ Termux روی گوشی نصب است" else "❌ Termux پیدا نشد",
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (installed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-            )
-
-            // ── Status bar: running state + last command + hide keyboard ─
-            val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+            // ── Mini terminal ──
+            Card(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                shape = RoundedCornerShape(8.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1117))
             ) {
-                Text(
-                    if (testing) "● در حال اجرا: $lastCmd" else "● آماده",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (testing) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                    maxLines = 1,
-                )
-                TextButton(onClick = { kb?.hide() }) { Text("بستن کیبورد") }
-            }
-
-            // ── Mini terminal console ────────────────────────────────────
-            Card(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color(0xFF101418))
-                        .verticalScroll(rememberScrollState())
-                        .padding(10.dp),
+                    modifier = Modifier.fillMaxSize().padding(8.dp)
                 ) {
-                    Text(
-                        console,
-                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                        color = Color(0xFF9FEF9F),
-                    )
-                }
-            }
+                    // Output area
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .verticalScroll(terminalScrollState)
+                    ) {
+                        Text(
+                            text = console,
+                            style = TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp,
+                                color = Color(0xFF7EE787)
+                            )
+                        )
+                    }
 
-            // ── Terminal keyboard: ONE toggleable section with ALL keys ──
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text("کیبورد ترمینال", style = MaterialTheme.typography.bodyLarge)
-                Switch(
-                    checked = kbOn,
-                    onCheckedChange = { kbOn = it },
-                )
-            }
-            if (kbOn) {
-                // Row 1 — history & control keys
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    listOf("↑", "↓", "ESC", "CTRL", "ALT", "TAB").forEach { k ->
-                        TextButton(onClick = {
-                            when (k) {
-                                "↑" -> {
-                                    if (history.isNotEmpty()) {
-                                        historyIdx = if (historyIdx == -1) history.size - 1 else (historyIdx - 1).coerceAtLeast(0)
-                                        command = history[historyIdx]
-                                    }
+                    Divider(color = Color(0xFF21262D), thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
+
+                    // Inline prompt (BasicTextField + prefix)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "minis@termux:~$ ",
+                            style = TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp,
+                                color = Color(0xFF58A6FF)
+                            )
+                        )
+                        BasicTextField(
+                            value = command,
+                            onValueChange = { command = it },
+                            modifier = Modifier.weight(1f).focusRequester(focusRequester),
+                            textStyle = TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 13.sp,
+                                color = Color.White
+                            ),
+                            cursorBrush = SolidColor(Color(0xFF58A6FF)),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+                            keyboardActions = KeyboardActions(onSend = { runCommand(command) })
+                        )
+                        IconButton(
+                            onClick = { runCommand(command) },
+                            enabled = !testing && command.isNotBlank(),
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "ارسال",
+                                tint = if (command.isNotBlank()) Color(0xFF58A6FF) else Color.Gray
+                            )
+                        }
+                    }
+
+                    // ── Keyboard inside the terminal ──
+                    if (kbOn) {
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        // Row 1: control keys
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            listOf("↑", "↓", "ESC", "CTRL", "ALT", "TAB", "CLR").forEach { k ->
+                                Surface(
+                                    onClick = {
+                                        when (k) {
+                                            "↑" -> if (history.isNotEmpty()) {
+                                                historyIdx = if (historyIdx == -1) history.size - 1 else (historyIdx - 1).coerceAtLeast(0)
+                                                command = history[historyIdx]
+                                            }
+                                            "↓" -> if (history.isNotEmpty()) {
+                                                historyIdx = (historyIdx + 1).coerceAtMost(history.size - 1)
+                                                command = history[historyIdx]
+                                            }
+                                            "TAB" -> command += "\t"
+                                            "CLR" -> command = ""
+                                            else -> log("کلید $k در شل مستقیم اعمال می‌شود.")
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFF21262D)
+                                ) {
+                                    Text(
+                                        k,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = Color.White)
+                                    )
                                 }
-                                "↓" -> {
-                                    if (history.isNotEmpty()) {
-                                        historyIdx = (historyIdx + 1).coerceAtMost(history.size - 1)
-                                        command = history[historyIdx]
-                                    }
-                                }
-                                "TAB" -> command += "\t"
-                                "ESC", "CTRL", "ALT" -> log("${k} فقط در ترمینال داخلی (شل Minis) کار می‌کند")
-                                else -> command += k
                             }
-                        }) { Text(k, style = MaterialTheme.typography.labelMedium) }
-                    }
-                }
-                // Row 2 — digits
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    ('0'..'9').forEach { d ->
-                        TextButton(onClick = { command += d }) { Text(d.toString(), style = MaterialTheme.typography.labelMedium) }
-                    }
-                    TextButton(onClick = { command = "" }) { Text("پاک کردن", style = MaterialTheme.typography.labelMedium) }
-                }
-                // Row 3 — shell characters
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    listOf("/", "~", "-", "|", ">", ">>", "<", "&", "*", ".", "_", "\"", "'", "\$", "&&", "sudo ").forEach { k ->
-                        TextButton(onClick = { command += k }) { Text(k, style = MaterialTheme.typography.labelMedium) }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // Row 2: digits
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            ('0'..'9').forEach { d ->
+                                Surface(
+                                    onClick = { command += d },
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFF161B22)
+                                ) {
+                                    Text(
+                                        d.toString(),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = Color(0xFFC9D1D9))
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // Row 3: shell characters
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            listOf("/", "~", "-", "|", ">", ">>", "<", "&", "*", ".", "_", "\"", "'", "\$", "&&", "sudo ").forEach { symbol ->
+                                Surface(
+                                    onClick = { command += symbol },
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = Color(0xFF21262D)
+                                ) {
+                                    Text(
+                                        symbol,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = Color(0xFF79C0FF))
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
 
+            // ── Bottom controls ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                OutlinedTextField(
-                    value = command,
-                    onValueChange = { command = it },
-                    modifier = Modifier.weight(1f).focusRequester(focusRequester),
-                    placeholder = { Text("دستور Termux… مثلاً pkg install python") },
-                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    singleLine = true,
-                )
-                IconButton(
-                    onClick = { val c = command.trim(); if (c.isNotEmpty()) { command = ""; runAndRemember(c) } },
-                    enabled = !testing && command.isNotBlank(),
-                ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "اجرا") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { runCommand("echo __TERMUX_OK__ && uname -a") },
+                        enabled = !testing && enabled,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) { Text("تست اتصال", fontSize = 12.sp) }
+                    Button(
+                        onClick = { runCommand("termux-setup-storage") },
+                        enabled = !testing && enabled,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) { Text("مجوز حافظه", fontSize = 12.sp) }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("کیبورد ترمینال", style = MaterialTheme.typography.bodySmall)
+                    Switch(checked = kbOn, onCheckedChange = { kbOn = it }, modifier = Modifier.scale(0.8f))
+                }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = { run("echo __TERMUX_OK__ && uname -a") },
-                    enabled = !testing && enabled,
-                ) { Text("تست اتصال") }
-                Button(
-                    onClick = { run("termux-setup-storage") },
-                    enabled = !testing && enabled,
-                ) { Text("اجازه حافظه") }
-            }
-
+            // ── Guide ──
             Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text("راهنمای راه‌اندازی (یک‌بار)", style = MaterialTheme.typography.titleSmall)
+                Column(modifier = Modifier.padding(8.dp)) {
+                    Text("راهنمای راه‌اندازی سریع", style = MaterialTheme.typography.titleSmall)
                     Text(
-                        "۱. Termux را از F-Droid نصب کن (نسخه Play Store قدیمی است).\n" +
-                        "۲. داخل Termux: pkg update && pkg install termux-api\n" +
-                        "۳. داخل Termux: termux-setup-storage  (اجازه حافظه را تأیید کن)\n" +
-                        "۴. در Termux: Settings → Allow external apps را روشن کن.\n" +
-                        "۵. به این اپ اجازه «دسترسی به همه فایل‌ها» بده (تنظیمات → مجوزهای سیستمی).\n" +
-                        "پوشه تبادل فایل بین دو اپ: $exchangeDir",
+                        "۱. Termux را از F-Droid نصب کنید.\n" +
+                        "۲. اجرای دستور: pkg update && pkg install termux-api\n" +
+                        "۳. در تنظیمات Termux گزینه Allow external apps را روشن کنید.\n" +
+                        "پوشه تبادل: $exchangeDir",
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
