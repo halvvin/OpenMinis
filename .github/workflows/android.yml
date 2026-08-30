@@ -1,0 +1,103 @@
+name: Android CI (debug APK)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/android
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Accept Android SDK licenses
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - name: Ensure required SDK components (NDK / CMake)
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "ndk;27.0.12077973" "cmake;3.22.1" "platforms;android-36" "build-tools;35.0.0" > /dev/null || true
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      # [T-ci-rootfs] alpine-minirootfs.tar.gz + proot-aarch64 are .gitignored
+      # (upstream prepares them on dev machines). Without them the sandbox
+      # crashes at first shell use: FileNotFoundException: alpine-minirootfs.tar.
+      - name: Prepare sandbox assets (Alpine rootfs + proot)
+        working-directory: .
+        run: |
+          chmod +x scripts/prepare_android_sandbox.sh
+          ./scripts/prepare_android_sandbox.sh
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # Public mirror ships provider-customization.properties.example only;
+      # the build reads the real file when present, empty values otherwise.
+      - name: Ensure provider customization exists
+        run: |
+          if [ ! -f app/provider-customization.properties ] && [ -f app/provider-customization.properties.example ]; then
+            cp app/provider-customization.properties.example app/provider-customization.properties
+          fi
+
+      # [T-stable-signature] Reuse ONE debug keystore across ALL CI builds.
+      # Without this, every build generates a fresh debug key and Android
+      # rejects upgrades with INSTALL_FAILED_UPDATE_INCOMPATIBLE
+      # ("App not installed" when installing over the previous version).
+      # The keystore is decoded into src/android/keystore/ and build.gradle.kts
+      # explicitly signs with it (env-based default paths proved unreliable).
+      - name: Restore stable debug keystore (validated)
+        run: |
+          if [ -n "$ANDROID_DEBUG_KEYSTORE_B64" ]; then
+            mkdir -p keystore
+            echo "$ANDROID_DEBUG_KEYSTORE_B64" | base64 -d > keystore/debug.keystore
+            chmod 600 keystore/debug.keystore
+            echo "keystore restored: $(wc -c < keystore/debug.keystore) bytes"
+            # [T-signature-fix] A CORRUPT/invalid keystore here previously
+            # produced an UNSIGNED APK (padding-only signing block) that
+            # Android refuses with "App not installed". Validate with
+            # keytool; on failure DELETE the file so gradle falls back to
+            # the default debug key — a signed APK beats a stable one.
+            if ! keytool -list -keystore keystore/debug.keystore -storepass android >/dev/null 2>&1; then
+              echo "::warning::decoded keystore is INVALID — falling back to default debug key"
+              rm -f keystore/debug.keystore
+            else
+              echo "keystore is valid ✓"
+            fi
+          else
+            echo "WARNING: ANDROID_DEBUG_KEYSTORE_B64 secret missing — build will use a fresh debug key"
+          fi
+        env:
+          ANDROID_DEBUG_KEYSTORE_B64: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace --no-daemon
+
+      - name: Verify APK signature (fail build if unsigned)
+        run: |
+          APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify "$APK"
+          echo "signature verified ✓ on $APK"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: openminis-debug-apk
+          path: src/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
