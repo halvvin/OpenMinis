@@ -97,13 +97,24 @@ resolve_ndk() {
         return
     fi
 
-    # Auto-detect highest available NDK in the SDK folder
+    # Auto-detect highest available NDK in the SDK folder (macOS path)
     local base="$HOME/Library/Android/sdk/ndk"
     if [ -d "$base" ]; then
         local latest
         latest=$(ls "$base" 2>/dev/null | sort -V | tail -n 1)
         if [ -n "$latest" ]; then
             echo "$base/$latest"
+            return
+        fi
+    fi
+
+    # Auto-detect highest available NDK in the standard Linux SDK path
+    # (GitHub Actions CI, Linux dev machines).
+    if [ -n "$ANDROID_HOME" ] && [ -d "$ANDROID_HOME/ndk" ]; then
+        local latest
+        latest=$(ls "$ANDROID_HOME/ndk" 2>/dev/null | sort -V | tail -n 1)
+        if [ -n "$latest" ]; then
+            echo "$ANDROID_HOME/ndk/$latest"
             return
         fi
     fi

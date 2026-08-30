@@ -2,8 +2,9 @@
 #
 # Prepare Android sandbox assets:
 #   1. Download Alpine Linux aarch64 minirootfs
-#   2. Download PRoot aarch64 static binary from Termux packages
-#   3. Place both into src/android/app/src/main/assets/
+#   2. Build the OpenMinis/proot fork (native-offload extension) via
+#      deps/build_proot.sh and install to assets/ + jniLibs/
+#   3. Stage Termux libtalloc + libandroid-shmem runtime deps into jniLibs
 #
 # Usage: ./scripts/prepare_android_sandbox.sh
 #
@@ -53,61 +54,23 @@ else
     echo "✓ Downloaded: $ROOTFS_FILE ($(du -h "$ROOTFS_FILE" | cut -f1))"
 fi
 
-# --- PRoot binary ---
-if [ -f "$PROOT_FILE" ]; then
-    echo "✓ PRoot binary already exists: $PROOT_FILE"
-else
-    echo "Downloading PRoot ${PROOT_VERSION} aarch64 from Termux..."
-
-    TMPDIR="$(mktemp -d)"
-    trap 'rm -rf "$TMPDIR"' EXIT
-
-    DEB_FILE="$TMPDIR/proot.deb"
-    curl -fSL -o "$DEB_FILE" "$PROOT_DEB_URL"
-
-    # Extract .deb (it's an ar archive containing data.tar.xz)
-    cd "$TMPDIR"
-    ar x "$DEB_FILE"
-
-    # Extract data archive
-    if [ -f "data.tar.xz" ]; then
-        tar xf data.tar.xz
-    elif [ -f "data.tar.gz" ]; then
-        tar xzf data.tar.gz
-    elif [ -f "data.tar.zst" ]; then
-        zstd -d data.tar.zst -o data.tar
-        tar xf data.tar
-    else
-        echo "Error: Could not find data archive in .deb"
-        ls -la "$TMPDIR"
-        exit 1
-    fi
-
-    # Find the proot binary
-    PROOT_BIN=$(find "$TMPDIR" -name "proot" -type f | head -1)
-    if [ -z "$PROOT_BIN" ]; then
-        echo "Error: Could not find proot binary in extracted .deb"
-        find "$TMPDIR" -type f
-        exit 1
-    fi
-
-    cp "$PROOT_BIN" "$PROOT_FILE"
-    chmod +x "$PROOT_FILE"
-    cd "$PROJECT_ROOT"
-
-    echo "✓ Extracted PRoot binary: $PROOT_FILE ($(du -h "$PROOT_FILE" | cut -f1))"
+# --- PRoot: build the OpenMinis fork (native-offload extension) ---
+# The stock Termux PRoot binary does NOT support the --native-offload option
+# that the Android app requires (PRootKernel.kt adds it for every shell
+# command).  Build the OpenMinis/proot fork via deps/build_proot.sh instead.
+# The same binary is installed to BOTH assets/proot-aarch64 (for asset-based
+# extraction) and jniLibs/arm64-v8a/libproot.so (for AGP packaging into
+# lib/arm64-v8a/).  The vendored Termux loaders are preserved (verified by
+# build_proot.sh's install_asset step, sha256-pinned).
+FORK_DIR="$PROJECT_ROOT/deps/proot"
+FORK_COMMIT="8cf13e997cdc9472997aae19df8050c073c9a86c"
+if [ ! -d "$FORK_DIR/.git" ]; then
+    echo "Cloning OpenMinis/proot fork (native-offload extension)..."
+    git clone https://github.com/OpenMinis/proot.git "$FORK_DIR"
 fi
-
-# [T-fix-libproot] Ensure the app-loadable native lib exists. The Termux
-# proot matches the vendored Termux loaders (libproot-loader*.so), so this
-# is the correct pairing — the fork-built proot would SEGV with them.
-if [ ! -f "$JNILIBS_DIR/libproot.so" ]; then
-    cp "$PROOT_FILE" "$JNILIBS_DIR/libproot.so"
-    chmod 755 "$JNILIBS_DIR/libproot.so"
-    echo "✓ Installed libproot.so → jniLibs ($(du -h "$JNILIBS_DIR/libproot.so" | cut -f1))"
-else
-    echo "✓ libproot.so already present in jniLibs"
-fi
+(cd "$FORK_DIR" && git checkout -q "$FORK_COMMIT" 2>/dev/null || true)
+chmod +x "$PROJECT_ROOT/deps/build_proot.sh"
+"$PROJECT_ROOT/deps/build_proot.sh"
 
 # [T-fix-libtalloc] The Termux proot binary is DYNAMICALLY linked against
 # libtalloc.so.2 (the repo's build_proot.sh builds a static one, but the CI
