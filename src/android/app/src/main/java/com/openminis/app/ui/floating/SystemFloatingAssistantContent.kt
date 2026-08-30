@@ -34,7 +34,7 @@ import com.openminis.app.ui.floating.FloatingAssistantViewModel
 @Composable
 fun SystemFloatingAssistantContent(
     viewModel: FloatingAssistantViewModel,
-    providerRepository: ProviderRepository,
+    providerRepository: com.openminis.app.data.repository.ProviderRepository?,
     onDrag: (Float, Float) -> Unit,
     onFocusNeeded: (Boolean) -> Unit,
     onResize: (Int, Int) -> Unit,
@@ -68,7 +68,8 @@ fun SystemFloatingAssistantContent(
     // Update provider label when model changes
     LaunchedEffect(selectedEntryId) {
         selProviderLabel = runCatching {
-            providerRepository.config.value.instances
+            providerRepository?.config?.value?.instances
+                .orEmpty()
                 .firstOrNull { it.id == (modelEntries.firstOrNull { it.id == selectedEntryId }?.providerInstanceId) }?.label
                 ?: ""
         }.getOrDefault("")
@@ -132,7 +133,7 @@ fun SystemFloatingAssistantContent(
                                 onDismissRequest = { providerMenu = false }) {
                                 val providers = modelEntries
                                     .groupBy { e ->
-                                        runCatching { providerRepository.config.value.instances }
+                                        runCatching { providerRepository?.config?.value?.instances }
                                             .getOrNull()?.firstOrNull { it.id == e.providerInstanceId }?.label
                                             ?: e.model.provider
                                     }
@@ -168,7 +169,7 @@ fun SystemFloatingAssistantContent(
                                 onDismissRequest = { modelMenu = false }) {
                                 val filtered = if (selProviderLabel.isNotBlank()) {
                                     modelEntries.filter { e ->
-                                        val lbl = runCatching { providerRepository.config.value.instances }
+                                        val lbl = runCatching { providerRepository?.config?.value?.instances }
                                             .getOrNull()?.firstOrNull { it.id == e.providerInstanceId }?.label
                                             ?: e.model.provider
                                         lbl == selProviderLabel

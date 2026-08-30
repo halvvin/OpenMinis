@@ -68,14 +68,14 @@ class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner {
     }
 
     private fun setupFloatingWindow() {
+        val service = this@FloatingAssistantService
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        layoutParams = WindowManager.LayoutParams(
+        val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_NO_FAIL_FAST,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -83,32 +83,35 @@ class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner {
             y = 200
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         }
+        layoutParams = params
         floatingView = ComposeView(this).apply {
-            ViewTreeLifecycleOwner.set(this, this@FloatingAssistantService)
-            ViewTreeViewModelStoreOwner.set(this, this@FloatingAssistantService)
-            this.setViewTreeSavedStateRegistryOwner(this@FloatingAssistantService)
+            ViewTreeLifecycleOwner.set(this, service)
+            ViewTreeViewModelStoreOwner.set(this, service)
+            this.setViewTreeSavedStateRegistryOwner(service)
             setContent {
-                val repo = providerRepository
-                val vm = FloatingAssistantViewModel(this, repo)
+                val repo = service.providerRepository
+                val vm = FloatingAssistantViewModel(this@FloatingAssistantService, repo)
                 SystemFloatingAssistantContent(
                     viewModel = vm,
                     providerRepository = repo,
                     onDrag = { dx, dy ->
-                        layoutParams.x += dx.toInt()
-                        layoutParams.y += dy.toInt()
-                        windowManager.updateViewLayout(this, layoutParams)
+                        service.layoutParams.x += dx.toInt()
+                        service.layoutParams.y += dy.toInt()
+                        service.windowManager.updateViewLayout(this@FloatingAssistantService.floatingView, service.layoutParams)
                     },
                     onFocusNeeded = { focusable ->
-                        layoutParams.flags = if (focusable)
-                            layoutParams.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+                        val p = service.layoutParams
+                        p.flags = if (focusable)
+                            p.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
                         else
-                            layoutParams.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        windowManager.updateViewLayout(this, layoutParams)
+                            p.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        service.windowManager.updateViewLayout(this@FloatingAssistantService.floatingView, p)
                     },
                     onResize = { w, h ->
-                        layoutParams.width = w
-                        layoutParams.height = h
-                        windowManager.updateViewLayout(this, layoutParams)
+                        val p = service.layoutParams
+                        p.width = w
+                        p.height = h
+                        service.windowManager.updateViewLayout(this@FloatingAssistantService.floatingView, p)
                     }
                 )
             }
