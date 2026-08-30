@@ -54,29 +54,13 @@ else
     echo "✓ Downloaded: $ROOTFS_FILE ($(du -h "$ROOTFS_FILE" | cut -f1))"
 fi
 
-# --- PRoot: build the OpenMinis fork (native-offload extension) ---
-# The stock Termux PRoot binary does NOT support the --native-offload option
-# that the Android app requires (PRootKernel.kt adds it for every shell
-# command).  Build the OpenMinis/proot fork via deps/build_proot.sh instead.
-# The same binary is installed to BOTH assets/proot-aarch64 (for asset-based
-# extraction) and jniLibs/arm64-v8a/libproot.so (for AGP packaging into
-# lib/arm64-v8a/).  The vendored Termux loaders are preserved (verified by
-# build_proot.sh's install_asset step, sha256-pinned).
-FORK_DIR="$PROJECT_ROOT/deps/proot"
-FORK_COMMIT="8cf13e997cdc9472997aae19df8050c073c9a86c"
-if [ ! -d "$FORK_DIR/.git" ]; then
-    echo "Cloning OpenMinis/proot fork (native-offload extension)..."
-    git clone https://github.com/OpenMinis/proot.git "$FORK_DIR"
-fi
-(cd "$FORK_DIR" && git checkout -q "$FORK_COMMIT" 2>/dev/null || true)
-chmod +x "$PROJECT_ROOT/deps/build_proot.sh"
-"$PROJECT_ROOT/deps/build_proot.sh"
+# --- Termux runtime deps staged FIRST (required by the fork proot's
+#     DT_NEEDED closure, checked by build_proot.sh's verify_artifacts) ---
 
-# [T-fix-libtalloc] The Termux proot binary is DYNAMICALLY linked against
-# libtalloc.so.2 (the repo's build_proot.sh builds a static one, but the CI
-# uses the Termux package). Without libtalloc.so.2 next to it, proot fails
-# with: CANNOT LINK EXECUTABLE ".../libproot.so": library "libtalloc.so.2"
-# not found. Download the Termux libtalloc package and install the .so.
+# [T-fix-libtalloc] proot is DYNAMICALLY linked against libtalloc.so.2
+# (DT_NEEDED). Without it next to libproot.so, proot fails with: CANNOT
+# LINK EXECUTABLE ".../libproot.so": library "libtalloc.so.2" not found.
+# Download the Termux libtalloc package and install the .so.
 TALLOC_VERSION="2.4.3"
 TALLOC_DEB_URL="$PROOT_REPO/pool/main/libt/libtalloc/libtalloc_${TALLOC_VERSION}_aarch64.deb"
 TALLOC_LIB="$JNILIBS_DIR/libtalloc.so.2"
@@ -108,9 +92,9 @@ else
     echo "✓ libtalloc.so.2 already present in jniLibs"
 fi
 
-# [T-fix-libandroid-shmem] The Termux proot binary is DYNAMICALLY linked
-# against libandroid-shmem.so as well (DT_NEEDED; it emulates System V
-# shared memory on top of ashmem). Without it next to libproot.so, Android
+# [T-fix-libandroid-shmem] proot is DYNAMICALLY linked against
+# libandroid-shmem.so as well (DT_NEEDED; it emulates System V shared
+# memory on top of ashmem). Without it next to libproot.so, Android
 # refuses to load the library:
 #   CANNOT LINK EXECUTABLE ".../libproot.so": library "libandroid-shmem.so"
 #   not found
@@ -146,6 +130,24 @@ if [ ! -f "$SHMEM_LIB" ]; then
 else
     echo "✓ libandroid-shmem.so already present in jniLibs"
 fi
+
+# --- PRoot: build the OpenMinis fork (native-offload extension) ---
+# The stock Termux PRoot binary does NOT support the --native-offload option
+# that the Android app requires (PRootKernel.kt adds it for every shell
+# command).  Build the OpenMinis/proot fork via deps/build_proot.sh instead.
+# The same binary is installed to BOTH assets/proot-aarch64 (for asset-based
+# extraction) and jniLibs/arm64-v8a/libproot.so (for AGP packaging into
+# lib/arm64-v8a/).  The vendored Termux loaders are preserved (verified by
+# build_proot.sh's install_asset step, sha256-pinned).
+FORK_DIR="$PROJECT_ROOT/deps/proot"
+FORK_COMMIT="8cf13e997cdc9472997aae19df8050c073c9a86c"
+if [ ! -d "$FORK_DIR/.git" ]; then
+    echo "Cloning OpenMinis/proot fork (native-offload extension)..."
+    git clone https://github.com/OpenMinis/proot.git "$FORK_DIR"
+fi
+(cd "$FORK_DIR" && git checkout -q "$FORK_COMMIT" 2>/dev/null || true)
+chmod +x "$PROJECT_ROOT/deps/build_proot.sh"
+"$PROJECT_ROOT/deps/build_proot.sh"
 
 echo ""
 echo "Assets ready in: $ASSETS_DIR"

@@ -475,7 +475,7 @@ verify_artifacts() {
                 log_warn "MISSING ELF dependency: libproot.so -> $dep"
                 failed=1
             fi
-        done < <(readelf -d "$JNILIBS_BIN" 2>/dev/null | sed -n 's/.*Shared library: \[\([^]]*\)\].*//p')
+        done < <(readelf -d "$JNILIBS_BIN" 2>/dev/null | sed -n 's/.*Shared library: \[\([^]]*\)\].*/\1/p')
     fi
 
     if [ "$failed" -ne 0 ]; then
