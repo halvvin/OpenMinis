@@ -145,6 +145,45 @@ else
     echo "✓ libtalloc.so.2 already present in jniLibs"
 fi
 
+# [T-fix-libandroid-shmem] The Termux proot binary is DYNAMICALLY linked
+# against libandroid-shmem.so as well (DT_NEEDED; it emulates System V
+# shared memory on top of ashmem). Without it next to libproot.so, Android
+# refuses to load the library:
+#   CANNOT LINK EXECUTABLE ".../libproot.so": library "libandroid-shmem.so"
+#   not found
+# and every shell command fails with "proot exit=1". Download the Termux
+# libandroid-shmem package and install the .so, mirroring the libtalloc step.
+SHMEM_VERSION="0.7"
+SHMEM_DEB_URL="$PROOT_REPO/pool/main/liba/libandroid-shmem/libandroid-shmem_${SHMEM_VERSION}_aarch64.deb"
+SHMEM_LIB="$JNILIBS_DIR/libandroid-shmem.so"
+if [ ! -f "$SHMEM_LIB" ]; then
+    echo "Downloading libandroid-shmem ${SHMEM_VERSION} aarch64 from Termux..."
+    TMPS="$(mktemp -d)"
+    if curl -fsSL -m 60 -o "$TMPS/shmem.deb" "$SHMEM_DEB_URL" 2>/dev/null; then
+        cd "$TMPS"
+        ar x shmem.deb 2>/dev/null
+        # Extract whichever data archive variant is present.
+        if [ -f data.tar.xz ]; then tar xf data.tar.xz
+        elif [ -f data.tar.gz ]; then tar xzf data.tar.gz
+        elif [ -f data.tar.zst ]; then zstd -d data.tar.zst -o data.tar && tar xf data.tar
+        fi
+        FOUND=$(find "$TMPS" -name 'libandroid-shmem.so' -type f | head -1)
+        if [ -n "$FOUND" ]; then
+            cp "$FOUND" "$SHMEM_LIB"
+            chmod 755 "$SHMEM_LIB"
+            echo "✓ Installed libandroid-shmem.so → jniLibs ($(du -h "$SHMEM_LIB" | cut -f1))"
+        else
+            echo "::warning::libandroid-shmem.so not found in package — proot may fail to link"
+        fi
+        cd "$PROJECT_ROOT"
+    else
+        echo "::warning::Could not download libandroid-shmem — proot may fail to link"
+    fi
+    rm -rf "$TMPS"
+else
+    echo "✓ libandroid-shmem.so already present in jniLibs"
+fi
+
 echo ""
 echo "Assets ready in: $ASSETS_DIR"
 ls -lh "$ASSETS_DIR"

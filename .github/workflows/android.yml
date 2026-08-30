@@ -95,6 +95,17 @@ jobs:
           "$APKSIGNER" verify "$APK"
           echo "signature verified ✓ on $APK"
 
+      # [T-fix-libandroid-shmem] Fail the build if any .so in the final APK
+      # has an unresolved DT_NEEDED (e.g. libproot.so -> libandroid-shmem.so
+      # when the latter is missing). Gradle assembles the APK without ever
+      # inspecting this closure, so a broken sandbox used to ship green.
+      - name: Verify APK native dependency closure (DT_NEEDED)
+        working-directory: .
+        run: |
+          chmod +x scripts/verify_apk_native.sh
+          APK=$(ls src/android/app/build/outputs/apk/debug/*.apk | head -1)
+          ./scripts/verify_apk_native.sh "$APK"
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
