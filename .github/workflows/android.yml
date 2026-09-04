@@ -95,17 +95,34 @@ jobs:
           "$APKSIGNER" verify "$APK"
           echo "signature verified ✓ on $APK"
 
-      # [F-A1 packaging fix] DT_NEEDED closure check on the FINAL APK.
-      # A missing non-system libproot dependency (libtalloc.so.2 /
-      # libandroid-shmem.so) assembles fine but breaks every shell command
-      # on device ("proot exit=1"). Fail the build instead of shipping it.
-      - name: Verify native dependency closure (DT_NEEDED)
+      # [T-fork-proot] Verify the packaged libproot.so actually supports the
+      # --native-offload option the app passes to every shell command. A
+      # stock Termux binary (or a stale artifact) would not contain it.
+      - name: Verify libproot.so supports --native-offload
+        working-directory: .
         run: |
-          set -e
-          REPO_ROOT="$GITHUB_WORKSPACE"
-          APK=$(ls "$REPO_ROOT"/src/android/app/build/outputs/apk/debug/*.apk | head -1)
-          chmod +x "$REPO_ROOT/scripts/verify_apk_native.sh"
-          "$REPO_ROOT/scripts/verify_apk_native.sh" "$APK"
+          APK=$(ls src/android/app/build/outputs/apk/debug/*.apk | head -1)
+          WORK=$(mktemp -d)
+          unzip -q "$APK" "lib/arm64-v8a/libproot.so" -d "$WORK"
+          LIB="$WORK/lib/arm64-v8a/libproot.so"
+          if ! strings "$LIB" 2>/dev/null | grep -q -- "--native-offload"; then
+            echo "::error::libproot.so does NOT support --native-offload (wrong PRoot binary packaged)"
+            exit 1
+          fi
+          echo "OK: libproot.so supports --native-offload ✓"
+          strings "$LIB" 2>/dev/null | grep -- "--native-offload" | head -1
+          rm -rf "$WORK"
+
+      # [T-fix-libandroid-shmem] Fail the build if any .so in the final APK
+      # has an unresolved DT_NEEDED (e.g. libproot.so -> libandroid-shmem.so
+      # when the latter is missing). Gradle assembles the APK without ever
+      # inspecting this closure, so a broken sandbox used to ship green.
+      - name: Verify APK native dependency closure (DT_NEEDED)
+        working-directory: .
+        run: |
+          chmod +x scripts/verify_apk_native.sh
+          APK=$(ls src/android/app/build/outputs/apk/debug/*.apk | head -1)
+          ./scripts/verify_apk_native.sh "$APK"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
