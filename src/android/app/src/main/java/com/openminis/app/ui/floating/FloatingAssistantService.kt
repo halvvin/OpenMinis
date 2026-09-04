@@ -53,7 +53,7 @@ class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner, Vi
      * and the store clear in onDestroy releases the scope.
      */
     private val assistantViewModel: FloatingAssistantViewModel by lazy {
-        ViewModelProvider(this, FloatingAssistantViewModel.Factory(applicationContext))
+        ViewModelProvider(this, FloatingAssistantViewModel.factory(applicationContext))
             .get(FloatingAssistantViewModel::class.java)
     }
 

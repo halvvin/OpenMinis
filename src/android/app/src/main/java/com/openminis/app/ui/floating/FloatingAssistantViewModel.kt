@@ -578,15 +578,18 @@ class FloatingAssistantViewModel(
         /**
          * [FA-BUG-01] Factory used by FloatingAssistantService so the VM is
          * created exactly once per service ViewModelStore — recomposition-proof.
+         * Mirrors the working ChatViewModel.factory() pattern (anonymous object
+         * instead of a named nested class).
          */
-        class Factory(private val appContext: Context) : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                require(modelClass.isAssignableFrom(FloatingAssistantViewModel::class.java)) {
-                    "Unknown ViewModel class: ${modelClass.name}"
+        fun factory(appContext: Context): ViewModelProvider.Factory =
+            object : ViewModelProvider.Factory {
+                @Suppress("UNCHECKED_CAST")
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    require(modelClass.isAssignableFrom(FloatingAssistantViewModel::class.java)) {
+                        "Unknown ViewModel class: ${modelClass.name}"
+                    }
+                    return FloatingAssistantViewModel(appContext.applicationContext) as T
                 }
-                return FloatingAssistantViewModel(appContext.applicationContext) as T
             }
-        }
     }
 }
