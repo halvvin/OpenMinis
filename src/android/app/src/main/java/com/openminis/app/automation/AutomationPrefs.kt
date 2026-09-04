@@ -82,6 +82,16 @@ class AutomationPrefs private constructor(context: Context) {
         get() = prefs.getInt(KEY_EXEC_MODE, 0)
         set(v) = prefs.edit().putInt(KEY_EXEC_MODE, v).apply()
 
+    // ── [B14] Floating assistant: auto-continue after failed streams ─────
+    var faAutoContinue: Boolean
+        get() = prefs.getBoolean(KEY_FA_AUTO_CONTINUE, true)
+        set(v) = prefs.edit().putBoolean(KEY_FA_AUTO_CONTINUE, v).apply()
+
+    // ── [B15] Floating assistant multi-chat index ────────────────────────
+    var assistantChatIds: String
+        get() = prefs.getString(KEY_FA_CHAT_IDS, "[]") ?: "[]"
+        set(v) = prefs.edit().putString(KEY_FA_CHAT_IDS, v).apply()
+
     /** Whether the assistant panel is currently expanded — REMOVED [F-A1
      *  cleanup]: assistantOpen/X/Y only ever had readers in the deleted
      *  in-app overlay. assistantW/H stay: the system overlay panel uses
@@ -193,6 +203,8 @@ class AutomationPrefs private constructor(context: Context) {
         private const val KEY_FA_H = "fa.h"
         private const val KEY_FA_MODEL = "fa.model"
         private const val KEY_EXEC_MODE = "fa.exec_mode"
+        private const val KEY_FA_AUTO_CONTINUE = "fa.auto_continue"
+        private const val KEY_FA_CHAT_IDS = "fa.chat_ids"
 
         @Volatile private var instance: AutomationPrefs? = null
 

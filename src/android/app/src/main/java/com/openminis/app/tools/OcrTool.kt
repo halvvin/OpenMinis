@@ -34,7 +34,7 @@ object OcrTool {
     )
 
     /** Returns a ToolExecutionResult with the extracted text. */
-    fun execute(argsJson: String, context: Context): ToolExecutionResult {
+    fun execute(argsJson: String, sessionId: String? = null, context: Context): ToolExecutionResult {
         val args = runCatching { JSONObject(argsJson) }.getOrDefault(JSONObject())
         val toolTitle = args.optString("tool_title", NAME)
         val path = args.optString("path", "").trim()
@@ -55,7 +55,7 @@ object OcrTool {
             put("path", path)
             put("prompt", prompt)
         }
-        val result = ReadImageTool.execute(inner.toString(), sessionId = null, context = context)
+        val result = ReadImageTool.execute(inner.toString(), sessionId = sessionId, context = context)
         return ToolExecutionResult(
             "📄 متن استخراج‌شده از تصویر:\n\n${result.output}",
             result.success,

@@ -55,6 +55,10 @@ fun SystemFloatingAssistantContent(
     val pendingApproval by viewModel.pendingApproval.collectAsState()
 
     var isOpen by remember { mutableStateOf(false) }
+    // [B16] Live panel size in dp — draggable handle updates these and the
+    // onResize callback re-applies LayoutParams without recomposition lag.
+    var panelWdp by remember { mutableStateOf(prefs.assistantW.coerceAtLeast(240)) }
+    var panelHdp by remember { mutableStateOf(prefs.assistantH.coerceAtLeast(300)) }
     var input by remember { mutableStateOf("") }
     var modelMenu by remember { mutableStateOf(false) }
     var providerMenu by remember { mutableStateOf(false) }
@@ -69,7 +73,10 @@ fun SystemFloatingAssistantContent(
             onFocusNeeded(false)
             onResize(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT)
         } else {
-            onResize(minW, minH)
+            onResize(
+                (panelWdp * density).toInt(),
+                (panelHdp * density).toInt(),
+            )
         }
     }
 
@@ -133,6 +140,54 @@ fun SystemFloatingAssistantContent(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
+                        // [B15] Chat switcher — list / new / delete chats.
+                        var chatMenu by remember { mutableStateOf(false) }
+                        Box {
+                            Text(
+                                "💬",
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier
+                                    .clickable { chatMenu = true }
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                            )
+                            DropdownMenu(expanded = chatMenu, onDismissRequest = { chatMenu = false }) {
+                                val chats by viewModel.chats.collectAsState()
+                                val activeId by viewModel.activeChatId.collectAsState()
+                                chats.forEach { c ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                (if (c.id == activeId) "● " else "○ ") + c.title,
+                                                maxLines = 1,
+                                            )
+                                        },
+                                        trailingIcon = {
+                                            if (chats.size > 1) {
+                                                Text(
+                                                    "🗑",
+                                                    modifier = Modifier.clickable {
+                                                        viewModel.deleteChat(c.id)
+                                                        chatMenu = false
+                                                    },
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            viewModel.switchChat(c.id)
+                                            chatMenu = false
+                                        },
+                                    )
+                                }
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text("＋ چت جدید") },
+                                    onClick = {
+                                        viewModel.newChat()
+                                        chatMenu = false
+                                    },
+                                )
+                            }
+                        }
                         Text("🤖", style = MaterialTheme.typography.titleMedium)
                         // Two-step: API selector
                         Box {
@@ -229,6 +284,15 @@ fun SystemFloatingAssistantContent(
                                         },
                                     )
                                 }
+                                HorizontalDivider()
+                                val autoCont by viewModel.autoContinue.collectAsState()
+                                DropdownMenuItem(
+                                    text = { Text(if (autoCont) "✓ ادامه‌ی خودکار روی خطا" else "ادامه‌ی خودکار روی خطا") },
+                                    onClick = {
+                                        viewModel.setAutoContinue(!autoCont)
+                                        modeMenu = false
+                                    },
+                                )
                             }
                         }
                         if (busy) {
@@ -246,6 +310,21 @@ fun SystemFloatingAssistantContent(
                         modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {                        items(messages, key = { "${it.role}-${System.identityHashCode(it)}" }) { m ->
+                            if (m.isError) {
+                                val lastFailed by viewModel.lastFailedText.collectAsState()
+                                if (lastFailed != null) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 6.dp),
+                                        horizontalArrangement = Arrangement.End,
+                                    ) {
+                                        TextButton(onClick = { viewModel.retryLast() }) {
+                                            Text("🔄 تلاش مجدد", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+                                }
+                            }
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = CardDefaults.cardColors(
@@ -308,6 +387,37 @@ fun SystemFloatingAssistantContent(
                                 Text("اجازه")
                             }
                         }
+                    }
+                    // ── [B16] Resize handle (bottom-right corner drag) ──
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.End)
+                            .size(22.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                RoundedCornerShape(topStart = 10.dp)
+                            )
+                            .pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragEnd = {
+                                        prefs.assistantW = panelWdp
+                                        prefs.assistantH = panelHdp
+                                    }
+                                ) { change, drag ->
+                                    change.consume()
+                                    panelWdp = (panelWdp + drag.x / density).toInt()
+                                        .coerceIn(240, 720)
+                                    panelHdp = (panelHdp + drag.y / density).toInt()
+                                        .coerceIn(300, 900)
+                                    onResize(
+                                        (panelWdp * density).toInt(),
+                                        (panelHdp * density).toInt(),
+                                    )
+                                }
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("◢", style = MaterialTheme.typography.labelSmall)
                     }
                     // ── Input ──
                     Row(

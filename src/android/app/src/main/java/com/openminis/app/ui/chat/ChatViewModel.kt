@@ -8366,7 +8366,7 @@ class ChatViewModel(
                 argsJson, providerRepository, _activeEntryId.value.orEmpty(), context,
             )
             WebExtractTool.NAME -> WebExtractTool.execute(argsJson, context)
-            OcrTool.NAME -> OcrTool.execute(argsJson, context)
+            OcrTool.NAME -> OcrTool.execute(argsJson, activeSessionId, context)
             WebSearchTool.NAME -> WebSearchTool.execute(argsJson, context)
             FileSearchTool.NAME -> FileSearchTool.execute(argsJson, activeSessionId, context)
             ArchiveTool.NAME -> ArchiveTool.execute(argsJson, context)

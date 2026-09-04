@@ -66,9 +66,19 @@ object FileSearchTool {
     }
 
     private fun resolveBase(arg: String, sessionId: String, context: Context): File? = when {
-        // [F-A2 fix / MOUNT-FILEOPS-01] Same /var/minis host-mapping fix as
-        // FileOpsTool: guest paths resolve through the session-aware resolver
-        // instead of a host path that never exists.
+        // [B10 fix] base="/var/minis" (exact root): resolveSessionHostPath has
+        // no per-session mapping for the bare root, so it fell through to the
+        // rootfs placeholder → search always came back empty. Users mean the
+        // session tree; map the root onto the session's workspace parent.
+        arg == "/var/minis" || arg == "/var/minis/" -> {
+            val sessionBase = PRootKernel.resolveSessionHostPath(sessionId, "/var/minis/workspace", context)
+                ?: PRootKernel.resolveHostPath("/var/minis/workspace")
+            // Walk the session dir's PARENT (minis-sessions/<sid>/) so
+            // workspace/attachments/offloads/browser are all covered.
+            sessionBase?.parentFile?.takeIf { it.exists() && it.isDirectory }
+        }
+        // [F-A2 fix / MOUNT-FILEOPS-01] Sub-paths resolve through the
+        // session-aware resolver like every other tool.
         arg.startsWith("/var/minis") -> PRootKernel.resolveSessionHostPath(sessionId, arg, context)
             ?: PRootKernel.resolveHostPath(arg)
         arg.startsWith("/sdcard") -> File("/storage/emulated/0" + arg.substringAfter("/sdcard"))

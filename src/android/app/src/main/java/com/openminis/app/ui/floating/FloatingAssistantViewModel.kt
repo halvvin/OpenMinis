@@ -104,16 +104,140 @@ class FloatingAssistantViewModel(
     /** Human-readable label of what the agent is doing right now (or null). */
     val currentAction = MutableStateFlow<String?>(null)
 
+    // [B13/B14] Last failed user text kept for the Retry button; null when the
+    // last turn succeeded. The panel shows a دکمه‌ی «تلاش مجدد» under errors.
+    private val _lastFailedText = MutableStateFlow<String?>(null)
+    val lastFailedText: StateFlow<String?> = _lastFailedText.asStateFlow()
+    private val _autoContinue = MutableStateFlow(prefs.faAutoContinue)
+    val autoContinue: StateFlow<Boolean> = _autoContinue.asStateFlow()
+
+    fun setAutoContinue(on: Boolean) {
+        _autoContinue.value = on
+        prefs.faAutoContinue = on
+    }
+
+    /** [B13] Re-send the last failed message (the panel's تلاش مجدد button). */
+    fun retryLast() {
+        val t = _lastFailedText.value ?: return
+        _lastFailedText.value = null
+        send(t)
+    }
+
     /** Tool title awaiting the user's approval in ACCEPT mode (or null). */
     val pendingApproval = MutableStateFlow<String?>(null)
 
     // ── Loop state ───────────────────────────────────────────────────────
     private val history = mutableListOf<LLMMessage>()
     private var loopJob: Job? = null
+
+    // ── [B15] Multiple conversations ─────────────────────────────────────
+    // Each chat = one persisted history file + a title; the panel switches
+    // between them and starts new ones. The active chat id also keys the
+    // UI messages rebuild (B17).
+    data class FaChat(val id: String, val title: String)
+
+    private val _chats = MutableStateFlow<List<FaChat>>(emptyList())
+    val chats: StateFlow<List<FaChat>> = _chats.asStateFlow()
+    private val _activeChatId = MutableStateFlow<String?>(null)
+    val activeChatId: StateFlow<String?> = _activeChatId.asStateFlow()
+    private val _activeChatTitle = MutableStateFlow("چت جدید")
+    val activeChatTitle: StateFlow<String> = _activeChatTitle.asStateFlow()
+
+    private fun chatFile(id: String) = File(appContext.filesDir, "floating_assistant_history_$id.json")
+
+    private fun loadChatIndex() {
+        runCatching {
+            val arr = JSONArray(prefs.assistantChatIds)
+            val list = mutableListOf<FaChat>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                list.add(FaChat(o.optString("id"), o.optString("title")))
+            }
+            _chats.value = list
+        }
+    }
+
+    private fun saveChatIndex() {
+        val arr = JSONArray()
+        _chats.value.forEach { arr.put(JSONObject().put("id", it.id).put("title", it.title)) }
+        prefs.assistantChatIds = arr.toString()
+    }
+
+    fun newChat() {
+        persistActiveChat()  // flush current buffers before switching
+        val id = "fa_" + java.util.UUID.randomUUID().toString().take(8)
+        val list = _chats.value.toMutableList()
+        list.add(0, FaChat(id, "چت جدید"))
+        _chats.value = list
+        saveChatIndex()
+        switchChat(id)
+    }
+
+    fun switchChat(id: String) {
+        persistActiveChat()
+        _activeChatId.value = id
+        _activeChatTitle.value = _chats.value.firstOrNull { it.id == id }?.title ?: "چت جدید"
+        // Re-point persistence + reload buffers for this chat.
+        val f = chatFile(id)
+        if (f.exists()) {
+            // Reuse loadPersistedHistory by temporarily pointing historyFile()
+            // — implemented via a swap of the active-id used by historyFile().
+            activeHistoryFileOverride = f
+            loadPersistedHistory()
+        } else {
+            activeHistoryFileOverride = f  // new empty chat
+            history.clear()
+            messages.value = emptyList()
+        }
+    }
+
+    fun deleteChat(id: String) {
+        runCatching { chatFile(id).delete() }
+        val list = _chats.value.filterNot { it.id == id }
+        _chats.value = list
+        saveChatIndex()
+        if (_activeChatId.value == id) {
+            if (list.isNotEmpty()) switchChat(list.first().id) else newChat()
+        }
+    }
+
+    fun renameActiveChat(title: String) {
+        val id = _activeChatId.value ?: return
+        _chats.value = _chats.value.map { if (it.id == id) it.copy(title = title) else it }
+        saveChatIndex()
+        _activeChatTitle.value = title
+    }
+
+    /** Auto-title from the first user message (keeps index tidy). */
+    private fun maybeAutoTitle(firstText: String) {
+        val id = _activeChatId.value ?: return
+        val cur = _chats.value.firstOrNull { it.id == id } ?: return
+        if (cur.title != "چت جدید") return
+        renameActiveChat(firstText.take(24))
+    }
+
+    @Volatile private var activeHistoryFileOverride: File? = null
     private var approvalDeferred: CompletableDeferred<Boolean>? = null
     private val browserPool by lazy { BrowserTabPool(appContext) }
 
     init {
+        loadChatIndex()
+        if (_chats.value.isEmpty()) {
+            // Migrate the legacy single-file history into chat #1 if present.
+            val legacy = File(appContext.filesDir, "floating_assistant_history.json")
+            val id = "fa_" + java.util.UUID.randomUUID().toString().take(8)
+            if (legacy.exists()) {
+                activeHistoryFileOverride = chatFile(id)
+                runCatching { legacy.copyTo(chatFile(id), overwrite = true) }
+                _chats.value = listOf(FaChat(id, "چت ۱"))
+                saveChatIndex()
+                activeHistoryFileOverride = null
+            }
+            loadChatIndex()
+        }
+        // switchChat handles buffer reload; default to newest.
+        val first = _chats.value.firstOrNull()?.id
+        if (first != null) switchChat(first) else newChat()
         loadPersistedHistory()
         viewModelScope.launch {
             // [FA-BUG-01 companion] MinisApp may finish initializing AFTER the
@@ -171,6 +295,8 @@ class FloatingAssistantViewModel(
         messages.value = messages.value + AssistantMessage("user", t)
         history.add(LLMMessage(LLMMessage.Role.USER, content = t))
         persistHistory()
+        maybeAutoTitle(t)
+        _lastFailedText.value = t  // cleared on a successful final reply
 
         val entry = selectedEntry.value
         if (entry == null) {
@@ -220,7 +346,11 @@ class FloatingAssistantViewModel(
         stop()
         messages.value = emptyList()
         history.clear()
+        _lastFailedText.value = null
+        autoContinueAttempt = 0
         runCatching { historyFile().delete() }
+        maybeAutoTitle("چت جدید")
+        renameActiveChat("چت جدید")
     }
 
     // ── The agent loop ───────────────────────────────────────────────────
@@ -268,20 +398,30 @@ class FloatingAssistantViewModel(
                 throw e
             } catch (e: LLMError.TransientError) {
                 appendError("⏳ خطای موقت سرور: ${e.message}")
+                maybeAutoContinue()
                 return
             } catch (e: Exception) {
                 appendError("❌ ${e.message ?: e.javaClass.simpleName}")
+                maybeAutoContinue()
                 return
             }
 
             val text = turnText.toString()
             if (calls.isEmpty()) {
-                if (text.isNotBlank()) append(AssistantMessage("assistant", text))
+                if (text.isNotBlank()) {
+                    append(AssistantMessage("assistant", text))
+                    _lastFailedText.value = null  // success — clear retry marker
+                }
                 currentAction.value = null
                 persistHistory()
                 return
             }
-            if (text.isNotBlank()) append(AssistantMessage("assistant", text))
+            // [B11 fix] Intermediate tool-turns: do NOT append their narration
+            // as separate chat bubbles. With narrating models (glm flash etc.)
+            // every turn re-stated the goal → the panel looked like it was
+            // REPEATING earlier messages. Keep intermediate text in engine
+            // history (model needs it) but show only tool rows; the final
+            // text-only turn renders the single answer bubble.
 
             // Record the assistant turn (text + tool_use parts) in history.
             val assistantParts = mutableListOf<AgentContentPart>()
@@ -334,6 +474,43 @@ class FloatingAssistantViewModel(
         append(AssistantMessage("assistant", "⚠️ به سقف $MAX_LOOP_TURNS مرحله رسیدم — برای ادامه پیام بفرست."))
     }
 
+    /**
+     * [B14] Auto-continue after a failed stream: one bounded retry after a
+     * short delay, mirroring the main chat's KeepWorking behavior. Never
+     * loops — a single automatic attempt per failure; the user can still tap
+     * تلاش مجدد for more.
+     */
+    private var autoContinueAttempt = 0
+    private fun maybeAutoContinue() {
+        if (!_autoContinue.value) return
+        if (autoContinueAttempt >= 2) {
+            append(AssistantMessage("assistant", "⛔ سقف ادامه‌ی خودکار رسید — با «تلاش مجدد» دستی امتحان کن."))
+            return
+        }
+        val t = _lastFailedText.value ?: return
+        autoContinueAttempt++
+        append(AssistantMessage("assistant", "🔄 ادامه‌ی خودکار — تلاش $autoContinueAttempt از 2 بعد از ۵ ثانیه…"))
+        viewModelScope.launch(Dispatchers.IO) {
+            delay(5000)
+            // Re-dispatch through the same pipeline without re-adding the user
+            // bubble (it is already in history from the failed attempt).
+            val entry = selectedEntry.value ?: return@launch
+            busy.value = true
+            try {
+                runAgentLoop(entry)
+                _lastFailedText.value = null
+                autoContinueAttempt = 0
+            } catch (e: CancellationException) {
+                // user pressed stop
+            } catch (e: Exception) {
+                appendError("❌ ${e.message ?: "خطای ناشناخته"}")
+            } finally {
+                busy.value = false
+                currentAction.value = null
+            }
+        }
+    }
+
     // ── Tools ────────────────────────────────────────────────────────────
     private fun buildTools(): List<com.openminis.app.data.model.AgentToolDefinition> {
         val supportsImage = _selectedEntry.value?.model?.inputModalities
@@ -367,7 +544,7 @@ class FloatingAssistantViewModel(
                 else TranslateTool.execute(argsJson, repo, _selectedEntryId.value.orEmpty(), appContext)
             }
             WebExtractTool.NAME -> WebExtractTool.execute(argsJson, appContext)
-            OcrTool.NAME -> OcrTool.execute(argsJson, appContext)
+            OcrTool.NAME -> OcrTool.execute(argsJson, sessionId, appContext)
             WebSearchTool.NAME -> WebSearchTool.execute(argsJson, appContext)
             FileSearchTool.NAME -> FileSearchTool.execute(argsJson, FLOATING_SESSION_ID, appContext)
             ArchiveTool.NAME -> ArchiveTool.execute(argsJson, appContext)
@@ -472,6 +649,16 @@ class FloatingAssistantViewModel(
             "/var/minis/workspace، /var/minis/attachments، /var/minis/shared، /var/minis/offloads.")
         append("\n\nابزار task_*: برای هر کار چندمرحله‌ای، اول task_create بساز (برنامه‌ات را ثبت کن)، " +
             "بعد پیشرفت واقعی را با task_update ثبت کن — این state ماندگار است و بعد از ری‌استارت اپ هم باقی می‌ماند.")
+        // [B12] Device-wide awareness — the assistant is NOT trapped inside
+        // the app: teach it about the on-device capability surface.
+        append("\n\nمهم: تو روی گوشی اندرویدی کاربر اجرا می‌شوی و **محدود به این اپ نیستی**:")
+        append("\n- `android-a11y-cli ui read` محتوای صفحه‌ی فعلی گوشی را می‌خواند (هر اپی)؛")
+        append("\n- `android-a11y-cli tap --x X --y Y` و `input` و `scroll` اپ‌های دیگر را کنترل می‌کنند؛")
+        append("\n- `android-a11y-cli screenshot --path /var/minis/attachments/s.png` اسکرین‌شات می‌گیرد (بعداً با read_image ببینش)؛")
+        append("\n- `android-a11y-cli extract text` متن اپ فعال را استخراج می‌کند.")
+        append("\nپس اگر کاربر گفت «فلان اپ را باز کن / این صفحه را بخوان / کلیک کن»، مستقیماً با این دستورها (از طریق shell_execute) انجامش بده — نه اینکه بگویی فقط داخل اپ می‌توانی. " +
+            "اگر سرویس دسترسی‌پذیری غیرفعال بود، خروجی خطا به کاربر می‌گوید کجا فعال کند.")
+        append("\nهمچنین: `android-device info`، `android-battery`، `android-clipboard get/set`، `android-notification`، `android-photos`، `android-calendar`، `android-alarm`، `android-speak` همه در دسترس‌اند.")
         append("\n\nتاریخ امروز: ").append(java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
             .format(java.util.Date()))
         when (prefs.executionMode) {
@@ -499,7 +686,13 @@ class FloatingAssistantViewModel(
     }
 
     // ── History persistence (survives service restarts) ──────────────────
-    private fun historyFile(): File = File(appContext.filesDir, "floating_assistant_history.json")
+    private fun historyFile(): File =
+        activeHistoryFileOverride ?: File(appContext.filesDir, "floating_assistant_history.json")
+
+    /** [B15] Flush in-memory buffers to the ACTIVE chat file before switching. */
+    private fun persistActiveChat() {
+        if (history.isNotEmpty() || messages.value.isNotEmpty()) persistHistory()
+    }
 
     private fun persistHistory() {
         runCatching {
@@ -543,6 +736,7 @@ class FloatingAssistantViewModel(
             if (!f.exists()) return
             val arr = JSONArray(f.readText())
             history.clear()
+            val restoredUi = mutableListOf<AssistantMessage>()
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 val role = when (o.optString("role")) {
@@ -570,7 +764,36 @@ class FloatingAssistantViewModel(
                     }
                 }
                 history.add(LLMMessage(role, content = o.optString("content"), contentParts = parts))
+                // [B17 fix] Rebuild the UI list from the same persisted data —
+                // previously only the engine `history` was restored, so after a
+                // service restart / force-stop the model still remembered the
+                // conversation but the panel LOOKED wiped.
+                val contentText = when {
+                    o.optString("content").isNotBlank() -> o.optString("content")
+                    // assistant turn with tool calls → summarize each call
+                    parts.any { it is AgentContentPart.ToolUse } ->
+                        parts.filterIsInstance<AgentContentPart.ToolUse>()
+                            .joinToString("\n") { "🔧 ${it.name} — ${it.input.optString("tool_title").ifBlank { it.name }}" }
+                    // tool-result turn → first line of each result
+                    parts.any { it is AgentContentPart.ToolResult } ->
+                        parts.filterIsInstance<AgentContentPart.ToolResult>()
+                            .joinToString("\n") { (if (it.isError) "❌ " else "✅ ") + it.content.lines().firstOrNull { l -> l.isNotBlank() }?.take(120).orEmpty() }
+                    else -> ""
+                }
+                if (contentText.isNotBlank()) {
+                    restoredUi.add(
+                        AssistantMessage(
+                            role = when (role) {
+                                LLMMessage.Role.ASSISTANT -> "assistant"
+                                else -> "user"
+                            },
+                            text = contentText,
+                            isError = parts.filterIsInstance<AgentContentPart.ToolResult>().any { it.isError },
+                        )
+                    )
+                }
             }
+            messages.value = restoredUi
         }
     }
 
