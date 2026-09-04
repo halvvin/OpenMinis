@@ -43,6 +43,13 @@ class ModelUseOffloadHandler(
             return NativeOffloadResult(if (args.positional.isEmpty()) 2 else 0, HELP)
         }
 
+        // [F-A2 security / P2-48] Uniform agent-policy gate — same tri-state
+        // (BYPASS / ASK_ONCE / NOT_ALLOWED) as every other privileged handler.
+        // minis-model-use can execute provider calls with stored credentials,
+        // so it must not be an ungated exception at the offload boundary.
+        // (After help handling so `--help` stays ungated.)
+        OffloadGate.enforce("model_use", "minis-model-use", args, request)?.let { return it }
+
         return try {
             when (val sub = args.positional[0]) {
                 "list" -> cmdList(args)

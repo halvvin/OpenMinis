@@ -41,6 +41,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Inventory2
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.PrivacyTip
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Psychology
 import androidx.compose.material.icons.automirrored.outlined.Send
@@ -86,6 +87,10 @@ fun SettingsScreen(
     onMemoryClick: () -> Unit = {},
     // [T-mcp-integration-android] MCP Integrations page, listed directly below
     // Memory. Default no-op for callers that haven't wired the route yet.
+    // [F-A1 fix] onSystemPermissionsClick: previously not declared at all,
+    // so the (otherwise orphaned) SystemPermissionsScreen could never be
+    // opened from Settings. Default no-op keeps older callers compiling.
+    val onSystemPermissionsClick: () -> Unit = {},
     onMcpClick: () -> Unit = {},
     // [T-soul-md] Soul settings page lives between Skills and Memory in the
     // Agent Runtime section; default no-op for callers that haven't wired
@@ -303,6 +308,16 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_section_permissions),
                     subtitle = stringResource(R.string.settings_permissions_subtitle),
                     onClick = onPermissionsClick,
+                )
+                // [F-A1 fix] Reachable entry for the previously-orphaned
+                // SystemPermissionsScreen (voice-correction data wipe, a11y
+                // Shizuku repair, OEM autostart guidance).
+                SettingsItem(
+                    icon = Icons.Outlined.PrivacyTip,
+                    iconColor = Color(0xFF34C759),
+                    title = stringResource(R.string.system_permissions_title),
+                    subtitle = stringResource(R.string.settings_system_permissions_subtitle),
+                    onClick = onSystemPermissionsClick,
                     showDivider = false,
                 )
             }

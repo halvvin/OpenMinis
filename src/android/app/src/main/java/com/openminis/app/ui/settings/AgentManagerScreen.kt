@@ -121,9 +121,19 @@ fun AgentManagerScreen(onBack: () -> Unit) {
                                 if (entry.runCmd.isNotBlank()) TextButton(onClick = { scope.launch { runFor(entry, entry.runCmd) } }) { Text("اجرا") }
                                 TextButton(onClick = { scope.launch {
                                     busy = true
+                                    // [F-A2 security / P2-07] The agent name is
+                                    // interpolated into a shell command. Spaces→
+                                    // underscore was the only sanitization, so a
+                                    // name like `x;rm -rf ~` executed arbitrary
+                                    // sandbox commands. Restrict the directory
+                                    // token to a safe charset — a real install
+                                    // directory never contains anything else.
+                                    val dirToken = entry.name.map {
+                                        if (it.isLetterOrDigit() || it == '-' || it == '_' || it == '.') it else '_'
+                                    }.joinToString("")
                                     val r = ExecutionCoordinator.execute(
                                         "agent-manager",
-                                        "du -sh ~/.${entry.name.replace(' ', '_')} 2>/dev/null; df -h / | tail -1",
+                                        "du -sh ~/.${dirToken} 2>/dev/null; df -h / | tail -1",
                                         timeout = 30_000L,
                                     )
                                     output = "حجم و فضا:\n${r.output}"

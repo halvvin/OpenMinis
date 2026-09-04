@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Environment
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.sandbox.PRootKernel
 import org.json.JSONObject
 import java.io.File
 
@@ -54,7 +55,7 @@ object FileOpsTool {
         if (op.isEmpty() || path.isEmpty()) {
             return ToolExecutionResult("Error: 'operation' and 'path' are required.", false, toolTitle = toolTitle)
         }
-        val file = resolve(path)
+        val file = resolve(path, context)
             ?: return ToolExecutionResult("Error: Invalid path: $path (only app paths and /sdcard are allowed).", false, toolTitle = toolTitle)
         if (op == "list") {
             if (!file.exists()) return ToolExecutionResult("Error: Path not found: $path", false, toolTitle = toolTitle)
@@ -81,7 +82,7 @@ object FileOpsTool {
                     }
                 }
                 "move", "rename", "copy" -> {
-                    val targetFile = resolve(target)
+                    val targetFile = resolve(target, context)
                         ?: return ToolExecutionResult("Error: Invalid target: $target", false, toolTitle = toolTitle)
                     if (targetFile.exists()) {
                         return ToolExecutionResult("⚠️ مقصد از قبل وجود دارد: $target — اول حذفش کن یا نام دیگری انتخاب کن.", false, toolTitle = toolTitle)
@@ -104,7 +105,17 @@ object FileOpsTool {
     /** Resolve an app-path or /sdcard path to a real File. */
     private fun resolve(path: String): File? {
         return when {
-            path.startsWith(BASE) -> File(path)
+            // [F-A2 fix / MOUNT-FILEOPS-01] /var/minis/... is a GUEST path —
+            // on the host these live under filesDir/minis-global (shared dirs)
+            // or filesDir/minis-sessions/<sid> (per-session dirs). The old
+            // File(path) pointed at a host location that never exists, so
+            // every file_ops call on an app path failed with ENOENT.
+            // The "floating-assistant" session id is the shared executor
+            // context; PRootKernel.resolveSessionHostPath resolves per-session
+            // subdirs against it and falls back to the global map for
+            // memory/skills/shared.
+            path.startsWith(BASE) -> PRootKernel.resolveSessionHostPath("floating-assistant", path, context)
+                ?: PRootKernel.resolveHostPath(path)
             SDCARD.any { path.startsWith(it) } -> {
                 val real = "/storage/emulated/0" + path.substringAfter("/sdcard").substringAfter("/storage/emulated/0")
                 File(real)

@@ -47,8 +47,14 @@ class BrowserUseOffloadHandler(private val app: MinisApp) : NativeOffloadHandler
             request.argv.drop(1),
             booleanFlags = BOOLEAN_FLAGS,
         )
-        val compact = args.hasFlag("compact")
-        val quiet = args.hasFlag("q", "quiet")
+        // [F-A2 security / P2-48] Uniform agent-policy gate (same tri-state as
+        // the other privileged handlers) — after help parsing so `--help`
+        // stays ungated. Browser automation can drive UI and exfiltrate page
+        // content, so it must be policy-gated at the boundary.
+        if (!args.hasFlag("h", "help")) {
+            OffloadGate.enforce("browser_use", "minis-browser-use", args, request)?.let { return it }
+        }
+        val compact = args.hasFlag("compact")        val quiet = args.hasFlag("q", "quiet")
         val withBase64 = args.hasFlag("with-base64", "with_base64")
 
         // Bare invocation / --help: exit 0 with help (matches iOS). iOS writes

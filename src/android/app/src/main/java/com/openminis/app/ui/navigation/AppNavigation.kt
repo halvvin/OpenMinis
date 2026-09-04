@@ -16,8 +16,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import com.openminis.app.ui.floating.FloatingAssistantOverlay
-import com.openminis.app.ui.floating.FloatingAssistantViewModel
 import com.openminis.app.deeplink.DeepLinkAction
 import com.openminis.app.deeplink.DeepLinkCoordinator
 import com.openminis.app.ui.settings.KEY_LAUNCH_SESSION
@@ -581,6 +579,11 @@ fun AppNavigation(
                 onAssistantClick = { navController.safeNavigate(Routes.ASSISTANT) },
                 onCloudSyncClick = { navController.safeNavigate(Routes.CLOUD_SYNC) },
                 onPermissionsClick = { navController.safeNavigate(Routes.PERMISSIONS) },
+                // [F-A1 fix] SystemPermissionsScreen was registered but
+                // UNREACHABLE — the voice-correction data wipe, the a11y
+                // Shizuku repair and the OEM autostart guidance live only
+                // there. Exposed as a row under Permissions.
+                onSystemPermissionsClick = { navController.safeNavigate(Routes.SYSTEM_PERMISSIONS) },
                 onUsageClick = { navController.safeNavigate(Routes.USAGE_STATS) },
                 onAppearanceClick = { navController.safeNavigate(Routes.APPEARANCE) },
                 onBackgroundClick = { navController.safeNavigate(Routes.BACKGROUND) },

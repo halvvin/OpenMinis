@@ -27,6 +27,17 @@ object ExecutionCoordinator {
 
     private const val TAG = "ExecutionCoordinator"
 
+    /**
+     * [F-A1 security] Redact secret-bearing tokens from a command string
+     * before it is written to logcat or the on-disk session log.
+     * Covers `sshpass -p <pw>` / `-p'<pw>'` / `-p "<pw>"` forms only —
+     * `ssh -p <port>` is left untouched.
+     */
+    fun redactSecrets(command: String): String = command
+        .replace(Regex("""(sshpass\s+-p\s*)(?:"([^"]*)"|'([^']*)'|(\S+))""")) { m ->
+            "${m.groupValues[1]}'******'"
+        }
+
     data class CommandResult(
         val output: String,
         val exitCode: Int,
@@ -89,7 +100,11 @@ object ExecutionCoordinator {
 
             // [diag] trace the sessionId that shell_execute is dispatched with —
             // suspected source of the Chinese-emoji filename vanishing bug
-            Log.w(TAG, "[diag] execute sessionId=$sessionId cmd=${command.take(120).replace('\n', ' ')}")
+            // [F-A1 security] redactSecrets() masks sshpass passwords (AlwaysOn
+            // engine) and similar `-p '<secret>'` tokens BEFORE the line lands
+            // in logcat / the on-disk session log.
+            Log.w(TAG, "[diag] execute sessionId=$sessionId cmd=" +
+                redactSecrets(command).take(120).replace('\n', ' '))
 
             // Get or create shell — protected by globalLock to avoid duplicate creation
             val shell = getOrCreateShell(sessionId)

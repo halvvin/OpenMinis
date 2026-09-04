@@ -227,6 +227,16 @@ object DeepLinkHandler {
             "user-profile", "profile" -> DeepLinkAction.OpenSettingsScreen(Routes.USER_PROFILE)
             "keep-working", "keep_working" -> DeepLinkAction.OpenSettingsScreen(Routes.KEEP_WORKING)
             "cloud-sync", "cloud_sync" -> DeepLinkAction.OpenSettingsScreen(Routes.CLOUD_SYNC)
+            // [F-A1] The remaining fork-only screens were missing from the
+            // settings deeplink parser — any minis://settings/<x> for them
+            // silently landed on the Settings home. Mirror the in-app rows.
+            "assistant" -> DeepLinkAction.OpenSettingsScreen(Routes.ASSISTANT)
+            "mcp" -> DeepLinkAction.OpenSettingsScreen(Routes.MCP)
+            "soul" -> DeepLinkAction.OpenSettingsScreen(Routes.SOUL)
+            "system-permissions", "system_permissions" ->
+                DeepLinkAction.OpenSettingsScreen(Routes.SYSTEM_PERMISSIONS)
+            "scheduled-tasks", "scheduled_tasks" ->
+                DeepLinkAction.OpenSettingsScreen(Routes.SCHEDULED_TASKS)
             // Unknown path — land on Settings home rather than failing,
             // so the user can find what they wanted by browsing.
             else -> DeepLinkAction.OpenSettingsScreen(Routes.SETTINGS)

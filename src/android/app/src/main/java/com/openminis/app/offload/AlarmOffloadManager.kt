@@ -234,6 +234,95 @@ class AlarmOffloadManager(private val context: Context) {
      * entry in prefs and drops it iff it's a ONCE alarm or a timer; for
      * DAILY/WEEKDAYS the OS re-fires on its own and we keep the entry.
      */
+    /** [F-A1 hardening] True when [alarmId] exists in the persisted alarm
+     *  store. Used by AlarmReceiver to reject spoofed exported broadcasts
+     *  (the receiver must stay exported for the protected BOOT_COMPLETED). */
+    fun hasAlarm(alarmId: String): Boolean {
+        val alarms = loadAlarms()
+        for (i in 0 until alarms.length()) {
+            if (alarms.getJSONObject(i).optString("id") == alarmId) return true
+        }
+        return false
+    }
+
+    /**
+     * [F-A2 fix / SCHED-LEGACY-BOOT-01] Re-arm every persisted legacy alarm
+     * after a reboot. The OS drops ALL pending AlarmManager intents on
+     * shutdown — including setRepeating DAILY entries — and the old comment
+     * claiming they "survive via the OS" was wrong. ONCE/timer entries whose
+     * trigger time already passed are dropped (pre-reboot semantics).
+     */
+    fun rescheduleAllOnBoot() {
+        val alarms = loadAlarms()
+        var rearmed = 0
+        var dropped = 0
+        for (i in 0 until alarms.length()) {
+            val a = alarms.getJSONObject(i)
+            val id = a.optString("id")
+            val label = a.optString("label", "Alarm")
+            val requestCode = a.optInt("requestCode", (id.hashCode() and 0x7FFFFFFF))
+            val type = a.optString("type", "alarm")
+            val repeatMode = a.optString("repeatMode", "ONCE")
+
+            val pi = buildPendingIntent(id, requestCode, label)
+            try {
+                when (type) {
+                    "alarm" -> {
+                        val cal = Calendar.getInstance()
+                        cal.set(Calendar.HOUR_OF_DAY, a.optInt("hour", 7))
+                        cal.set(Calendar.MINUTE, a.optInt("minute", 0))
+                        cal.set(Calendar.SECOND, 0)
+                        cal.set(Calendar.MILLISECOND, 0)
+                        if (cal.before(Calendar.getInstance())) cal.add(Calendar.DAY_OF_YEAR, 1)
+                        when (repeatMode) {
+                            "DAILY" -> alarmManager.setRepeating(
+                                AlarmManager.RTC_WAKEUP, cal.timeInMillis,
+                                AlarmManager.INTERVAL_DAY, pi,
+                            )
+                            "WEEKDAYS" -> {
+                                skipToNextWeekday(cal)
+                                alarmManager.setExactAndAllowWhileIdle(
+                                    AlarmManager.RTC_WAKEUP, cal.timeInMillis, pi,
+                                )
+                            }
+                            else -> { // ONCE
+                                val trigger = a.optLong("triggerAtMs", 0L)
+                                if (trigger > System.currentTimeMillis()) {
+                                    alarmManager.setExactAndAllowWhileIdle(
+                                        AlarmManager.RTC_WAKEUP, trigger, pi,
+                                    )
+                                } else {
+                                    dropped++
+                                    continue
+                                }
+                            }
+                        }
+                        rearmed++
+                    }
+                    "timer" -> {
+                        val trigger = a.optLong("triggerAtMs", 0L)
+                        if (trigger > System.currentTimeMillis()) {
+                            alarmManager.setExactAndAllowWhileIdle(
+                                AlarmManager.RTC_WAKEUP, trigger, pi,
+                            )
+                            rearmed++
+                        } else {
+                            dropped++
+                        }
+                    }
+                }
+            } catch (e: SecurityException) {
+                AppLogger.warning(TAG, "rescheduleAllOnBoot: exact-alarm permission missing — ${e.message}")
+                return
+            } catch (e: Throwable) {
+                AppLogger.warning(TAG, "rescheduleAllOnBoot entry $id failed: ${e.message}")
+            }
+        }
+        if (rearmed > 0 || dropped > 0) {
+            AppLogger.info(TAG, "BOOT rescheduleAllOnBoot: rearmed=$rearmed dropped=$dropped")
+        }
+    }
+
     fun onAlarmFired(alarmId: String) {
         val alarms = loadAlarms()
         for (i in 0 until alarms.length()) {

@@ -35,7 +35,14 @@ import java.io.File
 class BrowserUseManager(
     val webView: WebView,
     profile: UserAgentProfile = UserAgentProfile.MOBILE_CHROME,
+    /** [F-A2 fix / P2-56] Owning chat session (set by BrowserTabPool) — the
+     *  minis:// interceptor needs it to resolve per-session workspace paths. */
+    sessionIdProvider: () -> String? = { null },
 ) {
+    private val sessionIdProvider = sessionIdProvider
+    /** Application context for path resolution (minis:// interceptor). */
+    private val context: android.content.Context get() = webView.context.applicationContext
+
     companion object {
         private const val TAG = "BrowserUseManager"
         private const val NAVIGATION_TIMEOUT_MS = 30_000L
@@ -402,7 +409,18 @@ class BrowserUseManager(
             val host = uri.host ?: return null
             val path = uri.path ?: ""
             val linuxPath = "/var/minis/$host$path"
-            val localFile = com.openminis.app.sandbox.PRootKernel.resolveHostPath(linuxPath)
+            // [F-A2 fix / P2-56] Two defects fixed at once:
+            //  (a) session-aware resolution — workspace/attachments/browser/
+            //      offloads are PER-SESSION on the host; the global bind map
+            //      never contains /var/minis/workspace, so every
+            //      minis://workspace/... URL 404'd.
+            //  (b) traversal guard — path components from the URL are
+            //      canonical-contained against the resolved session base.
+            val sid = sessionIdProvider()
+            val localFile = (if (sid != null)
+                com.openminis.app.sandbox.PRootKernel.resolveSessionHostPath(sid, linuxPath, context)
+            else null)
+                ?: com.openminis.app.sandbox.PRootKernel.resolveHostPath(linuxPath)
             if (localFile == null || !localFile.exists() || !localFile.isFile) {
                 return android.webkit.WebResourceResponse("text/plain", "UTF-8", 404, "Not Found",
                     emptyMap(), "File not found: $host$path".byteInputStream())
@@ -567,6 +585,15 @@ class BrowserUseManager(
 
         var normalized = urlString
         if (!normalized.contains("://")) normalized = "https://$normalized"
+
+        // [F-A2 security / P1-03] Model-chosen navigation is an SSRF surface.
+        // minis:// app-internal URLs and the user's own callback flows are
+        // exempt (handled upstream); everything else goes through the same
+        // NetworkPolicy as web_search / web_extract / download_file.
+        if (!normalized.startsWith("minis://")) {
+            val ssrfError = com.openminis.app.tools.NetworkPolicy.check(normalized)
+            if (ssrfError != null) return BrowserActionResult.error(ssrfError)
+        }
 
         val deferred = CompletableDeferred<Unit>()
         navigationDeferred = deferred
@@ -882,6 +909,17 @@ class BrowserUseManager(
 
     private suspend fun executeJS(script: String?): BrowserActionResult {
         if (script.isNullOrEmpty()) return BrowserActionResult.error("execute_js requires 'script'")
+        // [F-A2 security / P1-03] execute_js on an internal page (minis://
+        // local resource) could probe the app's own files/servers from inside
+        // the WebView. Cannot statically know the script's targets, so block
+        // the highest-risk pattern (network I/O from minis:// pages) — the
+        // policy layer still governs real http(s) navigations/fetches.
+        val currentPage = runCatching { webView.url.orEmpty() }.getOrDefault("")
+        if (currentPage.startsWith("minis://") &&
+            Regex("""fetch\s*\(|XMLHttpRequest|WebSocket|\.src\s*=""").containsMatchIn(script)
+        ) {
+            return BrowserActionResult.error("execute_js: network calls are not allowed on minis:// pages")
+        }
         // Wrap in an async IIFE so `await` works in user scripts.
         // Android WebView doesn't resolve Promises from evaluateJavascript,
         // so we use a JS bridge callback (__minis__.resolve / __minis__.reject).
@@ -966,6 +1004,16 @@ class BrowserUseManager(
 
     private suspend fun fetch(urlString: String?): BrowserActionResult {
         if (urlString.isNullOrEmpty()) return BrowserActionResult.error("fetch requires 'url' parameter")
+
+        // [F-A2 security / P1-03] Same SSRF gate as navigate — fetch() runs
+        // real network I/O from the page context and must not reach internal
+        // addresses just because it happens inside the WebView.
+        if (urlString.startsWith("minis://")) {
+            return BrowserActionResult.error("fetch: minis:// URLs are not supported (use navigate)")
+        }
+        val normalizedFetch = if (urlString.contains("://")) urlString else "https://$urlString"
+        val ssrfError = com.openminis.app.tools.NetworkPolicy.check(normalizedFetch)
+        if (ssrfError != null) return BrowserActionResult.error(ssrfError)
 
         // The fetch JS runs `await fetch(...)` inside an async IIFE, which
         // resolves to a Promise. Android's `WebView.evaluateJavascript` does

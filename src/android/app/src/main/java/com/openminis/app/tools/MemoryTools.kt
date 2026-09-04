@@ -10,6 +10,9 @@ import org.json.JSONObject
  */
 object MemoryTools {
 
+    /** [F-A2 fix / P2-15] Max chars accepted by memory_write (32 KB). */
+    const val MAX_MEMORY_WRITE_CHARS = 32 * 1024
+
     // -- Tool Definitions (Anthropic format) --
 
     fun memoryWriteToolDefinition(): JSONObject {
@@ -109,7 +112,19 @@ object MemoryTools {
             val content = obj.optString("content", "")
             val toolTitle = obj.optString("tool_title", "memory_write")
 
-            if (content.isBlank()) {
+            // [F-A2 fix / P2-15] Hard size cap at the tool boundary — the old
+            // path wrote model-generated blobs of any size into memory files
+            // that are later injected into EVERY system prompt. Large data
+            // belongs in /var/minis/shared via file_write; memory stores the
+            // path + a short summary.
+            if (content.length > MAX_MEMORY_WRITE_CHARS) {
+                ToolResult(
+                    "Error: memory write rejected — content is ${content.length} chars, limit is " +
+                        "$MAX_MEMORY_WRITE_CHARS. Save large data to /var/minis/shared with file_write " +
+                        "and store only the path + a short summary in memory.",
+                    false, toolTitle,
+                )
+            } else if (content.isBlank()) {
                 ToolResult("Error: Missing required 'content' parameter", false, toolTitle)
             } else {
                 val result = repository.writeMemory(content)

@@ -54,18 +54,52 @@ object WebExtractTool {
         }
 
         return try {
-            val conn = URL(url).openConnection() as HttpURLConnection
+            var conn = URL(url).openConnection() as HttpURLConnection
             conn.apply {
                 requestMethod = "GET"
                 connectTimeout = timeoutMs
                 readTimeout = timeoutMs
                 setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36")
                 setRequestProperty("Accept", "text/html,application/xhtml+xml,*/*")
-                instanceFollowRedirects = true
+                // [F-A2 security / P1-04] Follow redirects MANUALLY with a
+                // policy re-check at every hop. instanceFollowRedirects=true
+                // followed cross-host redirects inside HttpURLConnection, so
+                // an initially-permitted URL could 302 into an internal
+                // address and the SSRF gate never saw the final destination.
+                instanceFollowRedirects = false
             }
-            val code = conn.responseCode
+            var currentUrl = url
+            var code = 0
+            var redirects = 0
+            while (true) {
+                code = conn.responseCode
+                if (code in 300..399 && redirects < 5) {
+                    val loc = conn.getHeaderField("Location")
+                    conn.disconnect()
+                    if (loc.isNullOrEmpty()) break
+                    val next = java.net.URL(java.net.URL(currentUrl), loc).toString()
+                    // Re-apply the SSRF gate to EVERY redirect hop.
+                    val hopError = NetworkPolicy.check(next)
+                    if (hopError != null) {
+                        return ToolExecutionResult("⛔ مسیر ریدایرکت بلاک شد: $hopError", false, toolTitle = toolTitle)
+                    }
+                    currentUrl = next
+                    conn = URL(currentUrl).openConnection() as HttpURLConnection
+                    conn.apply {
+                        requestMethod = "GET"
+                        connectTimeout = timeoutMs
+                        readTimeout = timeoutMs
+                        setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36")
+                        setRequestProperty("Accept", "text/html,application/xhtml+xml,*/*")
+                        instanceFollowRedirects = false
+                    }
+                    redirects++
+                    continue
+                }
+                break
+            }
             if (code !in 200..299) {
-                return ToolExecutionResult("❌ HTTP $code برای $url", false, toolTitle = toolTitle)
+                return ToolExecutionResult("❌ HTTP $code برای $currentUrl", false, toolTitle = toolTitle)
             }
             val html = conn.inputStream.bufferedReader().use { it.readText() }.take(2_000_000)
             conn.disconnect()

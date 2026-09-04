@@ -112,6 +112,11 @@ object SoulMDParser {
             var value = line.substring(colon + 1).trim()
             if (value.length >= 2 && value.startsWith("\"") && value.endsWith("\"")) {
                 value = value.substring(1, value.length - 1)
+                // [F-A2 fix / P2-13] Symmetric unescape. The serializer writes
+                // escape(value) (backslash and quote), so the parser must
+                // reverse it — without this, every parse→save cycle re-escaped
+                // the value again and SOUL.md metadata grew `\\` runs over time.
+                value = unescape(value)
             }
             when (key) {
                 "name" -> if (value.isNotEmpty()) name = value
@@ -149,6 +154,10 @@ object SoulMDParser {
 
     private fun escape(s: String): String =
         s.replace("\\", "\\\\").replace("\"", "\\\"")
+
+    /** [F-A2 fix / P2-13] Inverse of [escape] — see the parser call site. */
+    private fun unescape(s: String): String =
+        s.replace("\\\"", "\"").replace("\\\\", "\\")
 }
 
 /**

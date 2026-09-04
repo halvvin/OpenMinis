@@ -69,6 +69,17 @@ object ToolSpeech {
                 val d = detail ?: fileName(args?.optString("path"), zh)
                 if (zh) "正在读取图片:$d" else "Reading image: $d"
             }
+            "task_create" -> {
+                val d = detail ?: clip(args?.optString("title")) ?: ""
+                if (zh) "正在创建任务:$d" else "Creating task: $d"
+            }
+            "task_update" -> {
+                val d = detail ?: clip(args?.optString("action")) ?: ""
+                if (zh) "正在更新任务:$d" else "Updating task: $d"
+            }
+            "task_list" -> {
+                if (zh) "正在查询任务" else "Listing tasks"
+            }
             else -> {
                 val d = detail ?: name
                 if (zh) "正在执行:$d" else "Running: $d"

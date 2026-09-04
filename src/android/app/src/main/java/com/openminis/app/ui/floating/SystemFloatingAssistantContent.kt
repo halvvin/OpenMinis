@@ -13,11 +13,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -30,6 +32,10 @@ import com.openminis.app.ui.floating.FloatingAssistantViewModel
  * FloatingAssistantService's WindowManager overlay. Direct callbacks (onDrag,
  * onFocusNeeded, onResize) update LayoutParams without Compose recomposition
  * lag — 60fps drag/focus/resize.
+ *
+ * [F-A1] Renders the REAL agent loop: per-tool status rows, a Stop button
+ * while the loop runs, and APPROVE / DENY buttons when ACCEPT mode pauses a
+ * tool call. Tap a message to copy it.
  */
 @Composable
 fun SystemFloatingAssistantContent(
@@ -45,6 +51,8 @@ fun SystemFloatingAssistantContent(
     val busy by viewModel.busy.collectAsState()
     val modelEntries by viewModel.modelEntries.collectAsState()
     val selectedEntryId by viewModel.selectedEntryId.collectAsState()
+    val currentAction by viewModel.currentAction.collectAsState()
+    val pendingApproval by viewModel.pendingApproval.collectAsState()
 
     var isOpen by remember { mutableStateOf(false) }
     var input by remember { mutableStateOf("") }
@@ -73,6 +81,14 @@ fun SystemFloatingAssistantContent(
                 .firstOrNull { it.id == (modelEntries.firstOrNull { it.id == selectedEntryId }?.providerInstanceId) }?.label
                 ?: ""
         }.getOrDefault("")
+    }
+
+    fun copyMessage(text: String) {
+        runCatching {
+            val cm = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("assistant", text))
+            android.widget.Toast.makeText(context, "کپی شد", android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     MaterialTheme {
@@ -188,6 +204,12 @@ fun SystemFloatingAssistantContent(
                             }
                         }
                         Spacer(Modifier.weight(1f))
+                        if (busy) {
+                            // [F-A1] Stop the agent loop.
+                            IconButton(onClick = { viewModel.stop() }, modifier = Modifier.size(24.dp)) {
+                                Icon(Icons.Default.Stop, contentDescription = "توقف", tint = MaterialTheme.colorScheme.error)
+                            }
+                        }
                         IconButton(onClick = { isOpen = false }, modifier = Modifier.size(24.dp)) {
                             Icon(Icons.Default.Close, contentDescription = "بستن")
                         }
@@ -198,20 +220,67 @@ fun SystemFloatingAssistantContent(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         items(messages, key = { "${it.role}-${System.identityHashCode(it)}" }) { m ->
-                            Card(modifier = Modifier.fillMaxWidth()) {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = when {
+                                        m.isError -> MaterialTheme.colorScheme.errorContainer
+                                        m.role == "tool" -> MaterialTheme.colorScheme.surfaceVariant
+                                        else -> MaterialTheme.colorScheme.surface
+                                    }
+                                ),
+                            ) {
                                 Text(
-                                    (if (m.role == "user") "🧑 " else "🤖 ") + m.text,
+                                    (when (m.role) {
+                                        "user" -> "🧑 "
+                                        "tool" -> "🔧 "
+                                        else -> "🤖 "
+                                    }) + m.text,
                                     style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier
+                                        .padding(6.dp)
+                                        .clickable { copyMessage(m.text) },
+                                    maxLines = 40)
+                            }
+                        }
+                        if (busy) {
+                            item {
+                                Row(
                                     modifier = Modifier.padding(6.dp),
-                                    maxLines = 20)
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        currentAction ?: "در حال پاسخ…",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
                     }
-                    if (busy) {
-                        Row(modifier = Modifier.padding(6.dp)) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("در حال پاسخ…", style = MaterialTheme.typography.labelSmall)
+                    // ── [F-A1] ACCEPT-mode approval gate ──
+                    if (pendingApproval != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(
+                                "اجازه‌ی «${pendingApproval}»؟",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 2,
+                            )
+                            TextButton(onClick = { viewModel.approvePendingTool(false) }) {
+                                Text("رد", color = MaterialTheme.colorScheme.error)
+                            }
+                            Button(onClick = { viewModel.approvePendingTool(true) }) {
+                                Text("اجازه")
+                            }
                         }
                     }
                     // ── Input ──
@@ -231,7 +300,7 @@ fun SystemFloatingAssistantContent(
                         Spacer(Modifier.width(4.dp))
                         IconButton(
                             onClick = { viewModel.send(input); input = "" },
-                            enabled = !busy && input.isNotBlank()
+                            enabled = input.isNotBlank() && (!busy || pendingApproval != null)
                         ) { Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "ارسال") }
                     }
                 }

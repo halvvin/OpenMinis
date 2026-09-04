@@ -310,6 +310,7 @@
     <string name="settings_storage_subtitle">Manage Alpine Linux rootfs and browse files</string>
     <string name="settings_section_permissions">Permissions</string>
     <string name="settings_permissions_subtitle">Control agent access to privacy-sensitive features</string>
+    <string name="settings_system_permissions_subtitle">Voice-correction data, accessibility repair, battery guidance</string>
     <string name="settings_section_logs">Logs</string>
     <string name="settings_logs_subtitle">View and export app logs</string>
     <string name="settings_section_about">About</string>
@@ -1695,4 +1696,6 @@
     <string name="browser_downloads_failed">Failed</string>
     <string name="browser_downloads_open">Open</string>
     <string name="provider_no_key_required">No key required</string>
+    <string name="perm_tool_model_use">Model Use (AI provider calls)</string>
+    <string name="perm_tool_browser_use">Browser Use (web automation)</string>
 </resources>

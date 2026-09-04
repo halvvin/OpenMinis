@@ -5747,6 +5747,29 @@ class ChatViewModel(
                 prefs.resetTaskState(sid)
                 return
             }
+            // [F-A1 fix — success-path parity] The chat-title filter and the
+            // global circuit breaker were previously only checked in the
+            // ERROR path, so enabling the engine auto-continued EVERY chat
+            // (filter bypassed) with NO global budget (the exact "model talks
+            // to itself" runaway the FIX-CIRCUIT-BREAKER comment describes).
+            if (config.chatFilterEnabled) {
+                val title = try {
+                    chatRepository.getSession(sid)?.title.orEmpty().trim()
+                } catch (_: Exception) { "" }
+                if (title.isEmpty() || config.targetChats.none { it.trim().equals(title, ignoreCase = true) }) {
+                    return
+                }
+            }
+            if (!prefs.tryAcquireRetry()) {
+                val cd = prefs.cooldownUntil()
+                val remaining = (cd - System.currentTimeMillis()) / 1000
+                appendSystemInfo(
+                    text = "⚠️ موتور ادامه خودکار: سقف تلاش سراسری رسید — ${remaining} ثانیه استراحت قبل از ادامه.",
+                    iconKind = "error",
+                )
+                prefs.resetTaskState(sid)
+                return
+            }
             prefs.setAttemptsFor(sid, attempt)
             appendSystemInfo(
                 text = "🔄 موتور ادامه خودکار: ادامه کار — تلاش $attempt از ${config.maxAttempts} پس از ${describeInterval(config.intervalSeconds)}…",
@@ -5859,6 +5882,20 @@ class ChatViewModel(
      * without the user remembering anything.
      */
     fun resumeInterruptedTaskIfAny() {
+        // [F-A3 / RECOVERY-STATE-01] Surface ambiguous executions from a
+        // previous process BEFORE any replay: the user (and the model, which
+        // reads system-info lines) learns that tool results may be missing.
+        try {
+            val sid0 = realSessionId.ifEmpty { sessionId }
+            val interrupted = com.openminis.app.agent.ExecutionLedger
+                .interruptedSince(context, sid0, System.currentTimeMillis() - 24L * 3_600_000L)
+            if (interrupted > 0) {
+                appendSystemInfo(
+                    text = "⚠️ $interrupted اجرای ابزار از جلسه‌ی قبل در وضعیت نامشخص رها شد — نتیجه‌ی آن‌ها ثبت نشده. قبل از تکرار دستورها، وضعیت فایل‌ها و خروجی‌ها را بررسی کن.",
+                    iconKind = "error",
+                )
+            }
+        } catch (_: Exception) { /* ledger is best-effort; never block resume */ }
         try {
             val prefs = keepWorkingPrefs()
             val config = prefs.load()
@@ -7973,7 +8010,34 @@ class ChatViewModel(
                 }
 
                 android.util.Log.d("ToolChain[VM]", "[turn=$turn] executeTool START name=$name args=${argsStr.take(200)}")
-                val result = executeTool(name, argsStr, id, allToolBlocks, assistantId, accumulatedText)
+                // [F-A3 / P1-01] Durable execution record: BEGIN → execute →
+                // COMPLETE/FAILED, with an in-flight duplicate guard. The
+                // ledger survives process death, so recovery paths can tell
+                // "never ran" from "ran, result unknown" instead of replaying
+                // blind (TOOL-REPLAY-01).
+                val ledgerId = com.openminis.app.agent.ExecutionLedger.begin(
+                    context, activeSessionId, name, argsStr,
+                )
+                val inFlightDup = com.openminis.app.agent.ExecutionLedger.findRunningDuplicate(
+                    context, name, argsStr, excludeId = ledgerId,
+                )
+                val result = if (inFlightDup != null) {
+                    ToolExecutionResult(
+                        "Blocked: an identical $name call is still RUNNING (started " +
+                            ((System.currentTimeMillis() - inFlightDup.startedAt) / 1000) +
+                            "s ago). Wait for it to finish instead of re-issuing it.",
+                        false, toolTitle = name,
+                    )
+                } else {
+                    var toolOk = false
+                    try {
+                        val r = executeTool(name, argsStr, id, allToolBlocks, assistantId, accumulatedText)
+                        toolOk = r.success
+                        r
+                    } finally {
+                        com.openminis.app.agent.ExecutionLedger.complete(context, ledgerId, success = toolOk)
+                    }
+                }
                 android.util.Log.d("ToolChain[VM]", "[turn=$turn] executeTool END name=$name success=${result.success} title=${result.toolTitle} outputLen=${result.output.length} output=${result.output.take(200)}")
 
                 // Record post-execution. WARNING text is appended to the tool
@@ -8300,6 +8364,13 @@ class ChatViewModel(
             WebSearchTool.NAME -> WebSearchTool.execute(argsJson, context)
             FileSearchTool.NAME -> FileSearchTool.execute(argsJson, context)
             ArchiveTool.NAME -> ArchiveTool.execute(argsJson, context)
+            // [F-A3 / Master Prompt] Durable Task Engine tools.
+            com.openminis.app.tasks.TaskTools.TASK_CREATE ->
+                com.openminis.app.tasks.TaskTools.executeCreate(argsJson, context)
+            com.openminis.app.tasks.TaskTools.TASK_UPDATE ->
+                com.openminis.app.tasks.TaskTools.executeUpdate(argsJson, context)
+            com.openminis.app.tasks.TaskTools.TASK_LIST ->
+                com.openminis.app.tasks.TaskTools.executeList(argsJson, context)
             // T178: pass sessionId + context so read_image routes through
             // resolveSessionHostPath like file_read/write/edit do — without
             // these, the tool consults the global last-writer-wins
@@ -9465,6 +9536,14 @@ Only invoke these tools when the user explicitly asks you to interact with anoth
                 append("\n\n")
                 append(crossChatFragment)
             }
+            // [F-A3 / Master Prompt "Task Engine"] Teach the model the durable
+            // task lifecycle. Kept AFTER the dynamic fragments and BEFORE the
+            // runtime context: it is static (cache-stable) text.
+            append("\n\nDurable task engine (task_create / task_update / task_list):\n")
+            append("- For any multi-step piece of work, FIRST call task_create with your plan as ordered steps.\n")
+            append("- As you work, record real progress: task_update action=complete_step (or fail_step with the error). Append meaningful log lines.\n")
+            append("- Tasks persist across app restarts. After a crash/restart, call task_list (status=RUNNING or PENDING) to resume where you left off instead of restarting from scratch.\n")
+            append("- Keep step titles short and outcome-oriented; put detail in the log lines.\n")
             // Runtime context goes last so the prefix above stays byte-stable
             // across requests within the same day. Keep ordering deterministic
             // (date → tz → lang → model count) — any reorder defeats the cache.

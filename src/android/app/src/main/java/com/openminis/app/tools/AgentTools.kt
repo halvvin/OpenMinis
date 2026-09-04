@@ -48,6 +48,11 @@ object AgentTools {
         add(WebSearchTool.definition())
         add(FileSearchTool.definition())
         add(ArchiveTool.definition())
+        // [F-A3 / Master Prompt] Durable Task Engine — the agent records its
+        // plan and progress in crash-surviving state instead of memory-only.
+        add(com.openminis.app.tasks.TaskTools.createDefinition())
+        add(com.openminis.app.tasks.TaskTools.updateDefinition())
+        add(com.openminis.app.tasks.TaskTools.listDefinition())
         if (supportsImageInput || visionGroupConfigured) {
             add(ReadImageTool.definition())
         }

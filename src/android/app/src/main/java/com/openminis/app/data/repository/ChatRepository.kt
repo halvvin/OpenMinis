@@ -105,9 +105,15 @@ class ChatRepository(internal val dao: ChatDao) {
         dao.updateSessionBinding(sessionId, binding, modelId)
     }
 
+    /**
+     * [F-A2 fix / P2-72] Delete the session and its messages in ONE
+     * transaction via the DAO. Previously two independent suspend calls — a
+     * crash between them left an empty orphan session row (or, reversed
+     * order, orphan messages). Also removes the DB-side group membership
+     * reference atomically.
+     */
     suspend fun deleteSession(id: String) {
-        dao.deleteMessages(id)
-        dao.deleteSession(id)
+        dao.deleteSessionAtomic(id)
     }
 
     // ─── Session groups ("folders") ────────────────────────────────────────
@@ -349,7 +355,12 @@ class ChatRepository(internal val dao: ChatDao) {
         tokenUsage: String? = null,
         reasoningContent: String? = null,
     ): MessageEntity {
-        val sortOrder = dao.nextSortOrder(sessionId)
+        // [F-A2 fix / P1/P2-71] The whole append — next-sort-order read, row
+        // insert, and session-preview update — now runs in ONE Room
+        // transaction (via dao.appendMessageAtomic). Previously the sort
+        // order was computed in a separate query, so two concurrent
+        // appenders could pick the same sort_order, and a crash between
+        // insert and preview update left the session list stale.
         val now = System.currentTimeMillis()
         // Cap the body so a runaway tool_result (e.g. a 13 MB browser_use
         // dump — Issue #17) cannot land an oversize blob into a Room row
@@ -369,13 +380,10 @@ class ChatRepository(internal val dao: ChatDao) {
             partsJson = capped,
             createdAt = now,
             tokenUsage = tokenUsage,
-            sortOrder = sortOrder,
+            sortOrder = 0, // assigned inside the transaction by the DAO
             reasoningContent = reasoningContent,
         )
-        dao.insertMessage(message)
-        val preview = extractTextPreview(capped)
-        dao.updateLastMessage(sessionId, preview, now)
-        return message
+        return dao.appendMessageAtomic(message) { preview -> extractTextPreview(preview) }
     }
 
     /**

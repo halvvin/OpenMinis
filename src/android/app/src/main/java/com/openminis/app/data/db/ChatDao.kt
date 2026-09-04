@@ -6,6 +6,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RawQuery
+import androidx.room.Transaction
 import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.coroutines.flow.Flow
 
@@ -208,6 +209,38 @@ interface ChatDao {
 
     @Query("SELECT COALESCE(MAX(sort_order), -1) + 1 FROM messages WHERE session_id = :sessionId")
     suspend fun nextSortOrder(sessionId: String): Int
+
+    /**
+     * [F-A2 fix / P2-72] Atomic session delete: messages + session row (and
+     * any session-state side rows) go in ONE transaction so a crash between
+     * them can never leave an orphan session or orphan messages.
+     */
+    @Transaction
+    suspend fun deleteSessionAtomic(sessionId: String) {
+        deleteMessages(sessionId)
+        deleteSession(sessionId)
+    }
+
+    /**
+     * [F-A2 fix / P1/P2-71] Atomic append: sort-order read + row insert +
+     * session-preview update happen inside ONE transaction. Previously the
+     * sort order was computed in a separate query, so two concurrent
+     * appenders could select the same next order (ordering collisions), and
+     * a crash between insert and preview update left the session list stale.
+     * The [previewFor] lambda keeps preview derivation at the repository
+     * layer without widening the DAO's knowledge of message formatting.
+     */
+    @Transaction
+    suspend fun appendMessageAtomic(
+        message: MessageEntity,
+        previewFor: (String) -> String,
+    ): MessageEntity {
+        val sortOrder = nextSortOrder(message.sessionId)
+        val inserted = message.copy(sortOrder = sortOrder)
+        insertMessage(inserted)
+        updateLastMessage(inserted.sessionId, previewFor(inserted.partsJson), inserted.createdAt)
+        return inserted
+    }
 
     @Query("DELETE FROM messages WHERE session_id = :sessionId")
     suspend fun deleteMessages(sessionId: String)

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [F-A1 security] Legacy backup rules (Android < 12). Exclude every
+     SharedPreferences store — secrets (API keys, OAuth tokens, WebDAV
+     password, SSH secret, env vars) must not be backed up. Room DBs are
+     regular chat data; excluding prefs only is sufficient to close the
+     credential-leak surface while keeping user content restorable. -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="provider_secrets.xml"/>
+    <exclude domain="sharedpref" path="oauth_prefs.xml"/>
+    <exclude domain="sharedpref" path="env_var_values.xml"/>
+    <exclude domain="sharedpref" path="env_var_values_plain_fallback.xml"/>
+    <exclude domain="sharedpref" path="cloud_sync_prefs.xml"/>
+    <exclude domain="sharedpref" path="cloud_sync_secure.xml"/>
+    <exclude domain="sharedpref" path="cloud_sync_secure_plain_fallback.xml"/>
+    <exclude domain="sharedpref" path="automation_prefs.xml"/>
+    <exclude domain="sharedpref" path="automation_secure.xml"/>
+    <exclude domain="sharedpref" path="mcp_oauth_secrets.xml"/>
+    <exclude domain="sharedpref" path="mcp_oauth_secrets_plain_fallback.xml"/>
+</full-backup-content>

@@ -130,6 +130,10 @@ src/android/app/src/main/jniLibs/arm64-v8a/*.so
 !src/android/app/src/main/jniLibs/arm64-v8a/libproot-loader32.so
 !src/android/app/src/main/jniLibs/arm64-v8a/libtalloc.so.2
 !src/android/app/src/main/jniLibs/arm64-v8a/libtalloc.so
+# [F-A1 packaging fix] libandroid-shmem.so is the other non-system DT_NEEDED
+# dependency of the Termux libproot.so — the exact "proot exit=1" bug when it
+# is missing from the APK. Tracked for the same reason as the talloc pair.
+!src/android/app/src/main/jniLibs/arm64-v8a/libandroid-shmem.so
 deps/lame-build/
 deps/lame-3.100/**/.libs/
 

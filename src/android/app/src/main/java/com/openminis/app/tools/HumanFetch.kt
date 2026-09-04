@@ -22,6 +22,8 @@ import java.util.concurrent.atomic.AtomicReference
  */
 object HumanFetch {
 
+    private const val TAG = "HumanFetch"
+
     @Volatile
     private var appContext: Context? = null
 
@@ -56,6 +58,15 @@ object HumanFetch {
     @SuppressLint("SetJavaScriptEnabled")
     fun fetch(url: String, timeoutMs: Long = 25000L): Result? {
         val ctx = appContext ?: return null
+        // [F-A2 security / P1-03] HumanFetch is the WebView fallback used by
+        // web_extract — same SSRF gate as the plain HttpURLConnection path.
+        // A blocked URL must not get a SECOND chance through a real browser
+        // engine just because it showed an anti-bot wall.
+        val ssrfError = NetworkPolicy.check(url)
+        if (ssrfError != null) {
+            Log.w(TAG, "HumanFetch blocked by NetworkPolicy: $ssrfError")
+            return null
+        }
         val latch = CountDownLatch(1)
         val htmlRef = AtomicReference<String?>(null)
         val finalUrlRef = AtomicReference<String?>(null)

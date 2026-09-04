@@ -27,13 +27,39 @@ class AlarmReceiver : BroadcastReceiver() {
             // [T-android-scheduled-tasks-design] Re-register every enabled
             // ScheduledTask with AlarmManager. The OS drops all pending
             // alarms on reboot, so persisted tasks would silently stop
-            // firing without this. The legacy AlarmOffloadManager entries
-            // are repeating alarms and DO survive reboot via the OS, so
-            // we don't have to re-register them here.
+            // firing without this.
+            // [F-A2 fix / SCHED-LEGACY-BOOT-01] The legacy AlarmOffloadManager
+            // entries (android-alarm CLI: DAILY/WEEKDAYS timers + one-shots)
+            // are RAM-only too — setRepeating/setExactAndAllowWhileIdle do NOT
+            // survive a reboot. The old comment claimed they "DO survive via
+            // the OS", which is wrong; now they are re-registered here as well.
             try {
                 com.openminis.app.scheduled.ScheduledTaskManager(context).rescheduleAll()
             } catch (t: Throwable) {
                 AppLogger.warning(TAG, "scheduled-task rescheduleAll failed: ${t.message}")
+            }
+            try {
+                com.openminis.app.offload.AlarmOffloadManager(context).rescheduleAllOnBoot()
+            } catch (t: Throwable) {
+                AppLogger.warning(TAG, "legacy alarm rescheduleAllOnBoot failed: ${t.message}")
+            }
+            // [F-A1 boot-resume] Floating assistant used to stay dead after a
+            // reboot even though the settings toggle still showed ON — the
+            // assistantEnabled pref was written by AssistantSettingsScreen but
+            // NEVER read at startup. BOOT_COMPLETED is a foreground-service
+            // start exemption on Android 12+, so this is the one place we can
+            // bring the overlay assistant back up unattended.
+            try {
+                val prefs = com.openminis.app.automation.AutomationPrefs.get(context)
+                if (prefs.assistantEnabled &&
+                    (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.M ||
+                        android.provider.Settings.canDrawOverlays(context))
+                ) {
+                    val svc = Intent(context, com.openminis.app.ui.floating.FloatingAssistantService::class.java)
+                    androidx.core.content.ContextCompat.startForegroundService(context, svc)
+                }
+            } catch (t: Throwable) {
+                AppLogger.warning(TAG, "floating assistant boot-resume failed: ${t.message}")
             }
             return
         }
@@ -42,6 +68,16 @@ class AlarmReceiver : BroadcastReceiver() {
         val label = intent.getStringExtra(AlarmOffloadManager.EXTRA_ALARM_LABEL) ?: "Alarm"
 
         AppLogger.debug(TAG, "Alarm triggered: id=$alarmId label=$label")
+
+        // [F-A1 hardening] The receiver is exported (required to receive the
+        // protected BOOT_COMPLETED broadcast), which means other apps can fire
+        // custom actions at it. Only honor an id that AlarmOffloadManager
+        // actually knows about — a spoofed broadcast with a fabricated id used
+        // to get through to the notification below with attacker-chosen text.
+        if (alarmId != "unknown" && !AlarmOffloadManager(context).hasAlarm(alarmId)) {
+            AppLogger.warning(TAG, "dropping alarm broadcast with unknown id=$alarmId (possible spoof)")
+            return
+        }
 
         // Drop the entry from prefs for ONCE alarms / timers so the next
         // `android-alarm list` call no longer surfaces them. DAILY/WEEKDAYS

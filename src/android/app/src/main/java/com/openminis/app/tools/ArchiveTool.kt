@@ -77,21 +77,30 @@ object ArchiveTool {
                     val destFile = resolvePath(dest)
                         ?: return ToolExecutionResult("Error: Invalid dest: $dest", false, toolTitle = toolTitle)
                     destFile.mkdirs()
+                    // [F-A2 security] ZIP-Slip + bomb hardening — same contract
+                    // as CloudSyncStore.unzipTo (ZipSafety.safeChild + budget).
+                    val budget = com.openminis.app.util.ZipSafety.Budget()
                     var extracted = 0
-                    ZipInputStream(FileInputStream(file)).use { zis ->
-                        var ze = zis.nextEntry
-                        while (ze != null) {
-                            val out = File(destFile, ze.name)
-                            if (ze.isDirectory) {
-                                out.mkdirs()
-                            } else {
-                                out.parentFile?.mkdirs()
-                                out.outputStream().use { os -> zis.copyTo(os) }
-                                extracted++
+                    try {
+                        ZipInputStream(FileInputStream(file)).use { zis ->
+                            var ze = zis.nextEntry
+                            while (ze != null) {
+                                val out = com.openminis.app.util.ZipSafety.safeChild(destFile, ze.name)
+                                val entryBytes = if (ze.isDirectory) 0L else ze.size.takeIf { it >= 0 } ?: 0L
+                                com.openminis.app.util.ZipSafety.verifyTotalBudget(budget, entryBytes)
+                                if (ze.isDirectory) {
+                                    out.mkdirs()
+                                } else {
+                                    out.parentFile?.mkdirs()
+                                    out.outputStream().use { os -> zis.copyTo(os) }
+                                    extracted++
+                                }
+                                zis.closeEntry()
+                                ze = zis.nextEntry
                             }
-                            zis.closeEntry()
-                            ze = zis.nextEntry
                         }
+                    } catch (e: java.io.IOException) {
+                        return ToolExecutionResult("⛔ استخراج متوقف شد: ${e.message}", false, toolTitle = toolTitle)
                     }
                     ToolExecutionResult("✅ ${extracted} فایل استخراج شد به $dest", true, toolTitle = toolTitle)
                 }

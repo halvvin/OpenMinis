@@ -33,6 +33,8 @@ import java.util.UUID
 class ShareReceiverActivity : ComponentActivity() {
 
     companion object {
+        /** [F-A2 fix / P2-61] Hard cap for a single inbound share (500 MB). */
+        private const val MAX_SHARE_STAGING_BYTES = 500L * 1024 * 1024
         private const val TAG = "ShareReceiver"
         private const val INLINE_TEXT_LIMIT = 1000
     }
@@ -285,12 +287,29 @@ class ShareReceiverActivity : ComponentActivity() {
         val name = "$prefix-${shortId()}${if (ext.isNotEmpty()) ".$ext" else ""}"
         val dest = File(SharedShareStore.sharedFileDirectory(this), name)
         return try {
+            // [F-A2 fix / P2-61] Hard byte ceiling while streaming — the old
+            // unbounded copy staged a multi-GB share before anyone looked at
+            // it. Oversized shares are rejected mid-stream; partial file removed.
+            var copied = 0L
             contentResolver.openInputStream(uri)?.use { input ->
-                dest.outputStream().use { input.copyTo(it) }
+                dest.outputStream().use { out ->
+                    val buf = ByteArray(64 * 1024)
+                    while (true) {
+                        val n = input.read(buf)
+                        if (n <= 0) break
+                        copied += n
+                        if (copied > MAX_SHARE_STAGING_BYTES) {
+                            throw java.io.IOException(
+                                "share exceeds " + (MAX_SHARE_STAGING_BYTES / (1024 * 1024)) + " MB staging cap")
+                        }
+                        out.write(buf, 0, n)
+                    }
+                }
             }
             name
         } catch (e: Exception) {
             AppLogger.warning(TAG, "copyUriToStaging($uri): ${e.message}")
+            runCatching { dest.delete() }
             null
         }
     }

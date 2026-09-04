@@ -11,6 +11,7 @@ import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
@@ -23,11 +24,15 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 /**
  * [T-floating-system] System-wide floating assistant — Foreground Service
  * with WindowManager (TYPE_APPLICATION_OVERLAY) so the bubble + panel float
- * OVER ALL apps, not just inside the app. Drag/resize are direct
+ * OVER all apps, not just inside the app. Drag/resize are direct
  * WindowManager.LayoutParams updates (60fps, no Compose recomposition lag).
  *
  * The ComposeView inside uses Lifecycle + SavedStateRegistry so it survives
  * service restarts correctly.
+ *
+ * [FA-BUG-01] The ViewModel is created ONCE through [ViewModelProvider] with
+ * this service as the [ViewModelStoreOwner] — never inside `setContent`.
+ * Recomposition cannot recreate it; the store is cleared in [onDestroy].
  */
 class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner, ViewModelStoreOwner {
 
@@ -42,9 +47,15 @@ class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner, Vi
     override val viewModelStore: ViewModelStore
         get() = _viewModelStore
 
-    /** Lazy access to the app's ProviderRepository (set in MinisApp.onCreate). */
-    private val providerRepository: com.openminis.app.data.repository.ProviderRepository?
-        get() = (application as? com.openminis.app.MinisApp)?.providerRepositoryOrNull
+    /**
+     * Created lazily but exactly once — ViewModelProvider.get() is idempotent
+     * against this service's store, so the conversation survives recomposition
+     * and the store clear in onDestroy releases the scope.
+     */
+    private val assistantViewModel: FloatingAssistantViewModel by lazy {
+        ViewModelProvider(this, FloatingAssistantViewModel.Factory(applicationContext))
+            .get(FloatingAssistantViewModel::class.java)
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -69,7 +80,14 @@ class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner, Vi
             .setSmallIcon(android.R.drawable.ic_menu_manage)
             .setOngoing(true)
             .build()
-        startForeground(1001, notification)
+        // [F-A1 manifest] The service now declares foregroundServiceType=
+        // specialUse (Android 14+ requirement) — see AndroidManifest.xml.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            startForeground(1001, notification,
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else {
+            startForeground(1001, notification)
+        }
     }
 
     private fun setupFloatingWindow() {
@@ -89,13 +107,15 @@ class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner, Vi
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         }
         layoutParams = params
+        // Touch the lazy delegate BEFORE setContent so the VM exists (and its
+        // model-loading poller is running) before the first frame renders.
+        val vm = service.assistantViewModel
         floatingView = ComposeView(this).apply {
             setViewTreeLifecycleOwner(service)
             setViewTreeViewModelStoreOwner(service)
             this.setViewTreeSavedStateRegistryOwner(service)
             setContent {
-                val repo = service.providerRepository
-                val vm = FloatingAssistantViewModel(this@FloatingAssistantService, repo)
+                val repo = (application as? com.openminis.app.MinisApp)?.providerRepositoryOrNull
                 SystemFloatingAssistantContent(
                     viewModel = vm,
                     providerRepository = repo,
@@ -127,6 +147,7 @@ class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner, Vi
     override fun onDestroy() {
         super.onDestroy()
         floatingView?.let { windowManager.removeView(it) }
+        floatingView = null
         _viewModelStore.clear()
     }
 

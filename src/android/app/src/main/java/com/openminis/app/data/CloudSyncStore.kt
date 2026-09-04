@@ -38,20 +38,39 @@ object CloudSyncStore {
     private const val PREFS = "cloud_sync_prefs"
 
     fun load(context: Context): Config {
+        // [F-A2 security / P2-79] WebDAV password now lives in
+        // EncryptedSharedPreferences (same Keystore wrapper as API keys).
+        // One-time migration: if the legacy plaintext slot still holds a
+        // value, move it over and delete the plaintext key.
+        val secure = com.openminis.app.util.EncryptedPrefsFactory.safeCreate(context, "cloud_sync_secure")
+        var pass = secure.getString("pass", null)
+        if (pass == null) {
+            val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            pass = p.getString("pass", null)
+            if (!pass.isNullOrEmpty()) {
+                secure.edit().putString("pass", pass).apply()
+                p.edit().remove("pass").apply()
+            }
+        }
         val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         return Config(
             baseUrl = p.getString("base", "") ?: "",
             username = p.getString("user", "") ?: "",
-            password = p.getString("pass", "") ?: "",
+            password = pass ?: "",
         )
     }
 
     fun save(context: Context, c: Config) {
+        // [F-A2 security / P2-79] Password goes to the encrypted store only;
+        // the plaintext store keeps just host/username and NEVER regains a
+        // "pass" key (load() also strips any stale one during migration).
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString("base", c.baseUrl)
             .putString("user", c.username)
-            .putString("pass", c.password)
+            .remove("pass")
             .apply()
+        com.openminis.app.util.EncryptedPrefsFactory.safeCreate(context, "cloud_sync_secure")
+            .edit().putString("pass", c.password).apply()
     }
 
     data class SyncResult(val ok: Boolean, val message: String)
@@ -248,10 +267,16 @@ object CloudSyncStore {
     }
 
     private fun unzipTo(bytes: ByteArray, target: File) {
+        // [F-A2 security] ZIP-Slip + extraction-bomb hardening (P2-34):
+        // entries resolve through ZipSafety.safeChild (canonical containment)
+        // and the whole archive is bounded by an uncompressed-size/entry budget.
+        val budget = com.openminis.app.util.ZipSafety.Budget()
         ZipInputStream(bytes.inputStream()).use { zis ->
             var e = zis.nextEntry
             while (e != null) {
-                val f = File(target, e.name)
+                val f = com.openminis.app.util.ZipSafety.safeChild(target, e.name)
+                val entryBytes = if (e.isDirectory) 0L else e.size.takeIf { it >= 0 } ?: 0L
+                com.openminis.app.util.ZipSafety.verifyTotalBudget(budget, entryBytes)
                 if (e.isDirectory) f.mkdirs() else {
                     f.parentFile?.mkdirs()
                     f.outputStream().use { zis.copyTo(it) }

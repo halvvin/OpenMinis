@@ -26,7 +26,8 @@ data class AlwaysOnConfig(
 
 data class TermuxConfig(
     val exchangeDir: String = "/sdcard/MinisFork",
-    val useTermuxApi: Boolean = false,       // prefer Termux:API helpers when true
+    // [F-A1 cleanup] useTermuxApi removed — it was a dead option: declared,
+    // saved, and synced to cloud JSON, but TermuxBridge never read it.
 )
 
 class AutomationPrefs private constructor(context: Context) {
@@ -61,25 +62,17 @@ class AutomationPrefs private constructor(context: Context) {
                 .apply()
         }
 
-    // ── Floating AI panel geometry (persists across sessions) ────────────
-    var floatPanelOpen: Boolean
-        get() = prefs.getBoolean(KEY_FP_OPEN, false)
-        set(v) = prefs.edit().putBoolean(KEY_FP_OPEN, v).apply()
-    var floatPanelX: Float
-        get() = prefs.getFloat(KEY_FP_X, 0f)
-        set(v) = prefs.edit().putFloat(KEY_FP_X, v).apply()
-    var floatPanelY: Float
-        get() = prefs.getFloat(KEY_FP_Y, 250f)
-        set(v) = prefs.edit().putFloat(KEY_FP_Y, v).apply()
-    var floatPanelW: Int
-        get() = prefs.getInt(KEY_FP_W, 300)
-        set(v) = prefs.edit().putInt(KEY_FP_W, v).apply()
-    var floatPanelH: Int
-        get() = prefs.getInt(KEY_FP_H, 380)
-        set(v) = prefs.edit().putInt(KEY_FP_H, v).apply()
+    // ── Floating AI panel geometry — REMOVED [F-A1 cleanup] ─────────────
+    // floatPanelOpen/X/Y/W/H belonged to the in-app FloatingAssistantOverlay,
+    // which was dead code (imported in AppNavigation but never called) and has
+    // been deleted. The system-wide FloatingAssistantService manages its own
+    // WindowManager layout params.
 
     // ── Smart Assistant floating window ─────────────────────────────────
-    /** Master switch for the floating assistant (default ON — core feature). */
+    /** Master switch for the floating assistant (default OFF).
+     *  Read by AlarmReceiver's BOOT_COMPLETED branch so the service comes
+     *  back up after a reboot / process death — previously this pref had no
+     *  startup reader, leaving the toggle lying about the service state. */
     var assistantEnabled: Boolean
         get() = prefs.getBoolean(KEY_FA_ENABLED, false)
         set(v) = prefs.edit().putBoolean(KEY_FA_ENABLED, v).apply()
@@ -89,17 +82,11 @@ class AutomationPrefs private constructor(context: Context) {
         get() = prefs.getInt(KEY_EXEC_MODE, 0)
         set(v) = prefs.edit().putInt(KEY_EXEC_MODE, v).apply()
 
-    /** Whether the assistant panel is currently expanded. */
-    var assistantOpen: Boolean
-        get() = prefs.getBoolean(KEY_FA_OPEN, false)
-        set(v) = prefs.edit().putBoolean(KEY_FA_OPEN, v).apply()
+    /** Whether the assistant panel is currently expanded — REMOVED [F-A1
+     *  cleanup]: assistantOpen/X/Y only ever had readers in the deleted
+     *  in-app overlay. assistantW/H stay: the system overlay panel uses
+     *  them for its minimum expanded size. */
 
-    var assistantX: Float
-        get() = prefs.getFloat(KEY_FA_X, 0f)
-        set(v) = prefs.edit().putFloat(KEY_FA_X, v).apply()
-    var assistantY: Float
-        get() = prefs.getFloat(KEY_FA_Y, 300f)
-        set(v) = prefs.edit().putFloat(KEY_FA_Y, v).apply()
     var assistantW: Int
         get() = prefs.getInt(KEY_FA_W, 340)
         set(v) = prefs.edit().putInt(KEY_FA_W, v).apply()
@@ -112,22 +99,49 @@ class AutomationPrefs private constructor(context: Context) {
         set(v) = prefs.edit().putString(KEY_FA_MODEL, v).apply()
 
     // ── Always-On server config ──────────────────────────────────────────
+    // [F-A1 security] The SSH secret now lives in EncryptedSharedPreferences
+    // (same Keystore-backed wrapper as provider API keys / OAuth tokens) —
+    // it used to sit in PLAIN SharedPreferences next to allowBackup=true.
+    // Migration: first read after this change moves the old plaintext value
+    // into the encrypted store and deletes the plaintext key.
+    private val securePrefs: android.content.SharedPreferences by lazy {
+        com.openminis.app.util.EncryptedPrefsFactory.safeCreate(context, "automation_secure")
+    }
+
+    private var alwaysOnSecret: String
+        get() {
+            var s = securePrefs.getString(KEY_AO_SECRET, null)
+            if (s == null) {
+                // One-time migration from the legacy plaintext slot.
+                s = prefs.getString(KEY_AO_SECRET, null)
+                if (!s.isNullOrEmpty()) {
+                    securePrefs.edit().putString(KEY_AO_SECRET, s).apply()
+                    prefs.edit().remove(KEY_AO_SECRET).apply()
+                }
+            }
+            return s ?: ""
+        }
+        set(v) {
+            securePrefs.edit().putString(KEY_AO_SECRET, v).apply()
+            prefs.edit().remove(KEY_AO_SECRET).apply()
+        }
+
     fun loadAlwaysOn(): AlwaysOnConfig = AlwaysOnConfig(
         serverType = prefs.getString(KEY_AO_TYPE, "vps") ?: "vps",
         host = prefs.getString(KEY_AO_HOST, "") ?: "",
         port = prefs.getInt(KEY_AO_PORT, 22),
         username = prefs.getString(KEY_AO_USER, "") ?: "",
-        secret = prefs.getString(KEY_AO_SECRET, "") ?: "",
+        secret = alwaysOnSecret,
         useSsh = prefs.getBoolean(KEY_AO_SSH, true),
     )
 
     fun saveAlwaysOn(c: AlwaysOnConfig) {
+        alwaysOnSecret = c.secret
         prefs.edit()
             .putString(KEY_AO_TYPE, c.serverType)
             .putString(KEY_AO_HOST, c.host)
             .putInt(KEY_AO_PORT, c.port)
             .putString(KEY_AO_USER, c.username)
-            .putString(KEY_AO_SECRET, c.secret)
             .putBoolean(KEY_AO_SSH, c.useSsh)
             .apply()
     }
@@ -135,13 +149,11 @@ class AutomationPrefs private constructor(context: Context) {
     // ── Termux config ────────────────────────────────────────────────────
     fun loadTermux(): TermuxConfig = TermuxConfig(
         exchangeDir = prefs.getString(KEY_TX_DIR, "/sdcard/MinisFork") ?: "/sdcard/MinisFork",
-        useTermuxApi = prefs.getBoolean(KEY_TX_API, false),
     )
 
     fun saveTermux(c: TermuxConfig) {
         prefs.edit()
             .putString(KEY_TX_DIR, c.exchangeDir)
-            .putBoolean(KEY_TX_API, c.useTermuxApi)
             .apply()
     }
 
@@ -168,20 +180,12 @@ class AutomationPrefs private constructor(context: Context) {
         private const val KEY_AO_HOST = "ao.host"
         private const val KEY_AO_PORT = "ao.port"
         private const val KEY_AO_USER = "ao.user"
-        private const val KEY_AO_SECRET = "ao.secret"
+        // [F-A1 security] KEY_AO_SECRET now lives in the encrypted
+        // "automation_secure" prefs file, not in the plaintext store.
         private const val KEY_AO_SSH = "ao.use_ssh"
         private const val KEY_TX_DIR = "tx.exchange_dir"
-        private const val KEY_TX_API = "tx.use_api"
         private const val KEY_AO_LOG = "ao.log"
-        private const val KEY_FP_OPEN = "fp.open"
-        private const val KEY_FP_X = "fp.x"
-        private const val KEY_FP_Y = "fp.y"
-        private const val KEY_FP_W = "fp.w"
-        private const val KEY_FP_H = "fp.h"
         private const val KEY_FA_ENABLED = "fa.enabled"
-        private const val KEY_FA_OPEN = "fa.open"
-        private const val KEY_FA_X = "fa.x"
-        private const val KEY_FA_Y = "fa.y"
         private const val KEY_FA_W = "fa.w"
         private const val KEY_FA_H = "fa.h"
         private const val KEY_FA_MODEL = "fa.model"
@@ -204,5 +208,5 @@ fun AlwaysOnConfig.toJson(): String = JSONObject().apply {
 }.toString()
 
 fun TermuxConfig.toJson(): String = JSONObject().apply {
-    put("exchangeDir", exchangeDir); put("useTermuxApi", useTermuxApi)
+    put("exchangeDir", exchangeDir)
 }.toString()

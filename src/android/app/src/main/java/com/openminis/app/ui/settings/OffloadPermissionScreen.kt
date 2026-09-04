@@ -386,6 +386,8 @@ private fun toolTitleRes(toolName: String): Int = when (toolName) {
     "photos" -> R.string.perm_tool_photos
     "a11y_cli" -> R.string.perm_tool_a11y_cli
     "shizuku_cli" -> R.string.perm_tool_shizuku_cli
+    "model_use" -> R.string.perm_tool_model_use
+    "browser_use" -> R.string.perm_tool_browser_use
     else -> 0
 }
 

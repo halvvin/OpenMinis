@@ -95,8 +95,35 @@ object NativeOffloadServer {
     private var serverSocket: LocalServerSocket? = null
     private var acceptThread: Thread? = null
 
+    // ── [F-A2 fix / P2-41/43/45] Bounded worker pool + cancellation registry ──
+    // The old model spawned an unbounded daemon thread per accepted client
+    // (resource exhaustion under load) and stop() only closed the socket —
+    // in-flight workers kept running against a possibly-stale rootfsTmpDir.
+    // A fixed pool caps concurrency; an active-workers registry lets stop()
+    // interrupt them; a watchdog timeout bounds any wedged handler.
+    private val workerPool = java.util.concurrent.newFixedThreadPool(8)
+    private val activeWorkers = java.util.Collections.newSetFromMap(
+        java.util.concurrent.ConcurrentHashMap<Thread, Boolean>())
+
+    /** Max time ONE handler invocation may run before it is abandoned. */
+    private const val HANDLER_TIMEOUT_MS = 60_000L
+
+    /** Max bytes a single reply may carry (output written to the tmp file). */
+    private const val MAX_REPLY_BYTES = 8L * 1024 * 1024
+
     @Volatile
     private var rootfsTmpDir: File? = null
+
+    /**
+     * [F-A3 / OFFLOAD-LIFECYCLE-04] Rootfs generation token. Bumped on
+     * every start()/stop(); each accepted client captures the generation at
+     * accept time and refuses to serve against a DIFFERENT generation — the
+     * old mutable rootfsTmpDir meant a worker mid-handler could write its
+     * reply into a tree that reset/move was deleting.
+     */
+    @Volatile
+    var rootfsGeneration: Long = 0
+        private set
 
     val registeredHandlers: Set<String> get() = handlers.keys.toSet()
 
@@ -109,6 +136,9 @@ object NativeOffloadServer {
     @Synchronized
     fun start(rootfsDir: File) {
         rootfsTmpDir = File(rootfsDir, "tmp")
+        // [F-A3 / OFFLOAD-LIFECYCLE-04] New generation on every start — even
+        // when the socket is already up (a rootfs switch re-points tmpDir).
+        rootfsGeneration++
         if (serverSocket != null) return
 
         // T287-followup: bind with bounded retry. Linux abstract sockets are
@@ -209,6 +239,14 @@ object NativeOffloadServer {
         try { serverSocket?.close() } catch (_: Exception) {}
         serverSocket = null
         acceptThread = null
+        // [F-A3 / OFFLOAD-LIFECYCLE-04] Invalidate the current generation so
+        // any worker that misses the interrupt still fails its generation
+        // check instead of writing into a vanishing rootfs.
+        rootfsGeneration++
+        // [F-A2 fix / P2-45] Interrupt in-flight workers so they cannot keep
+        // running against a rootfs generation that is about to be replaced.
+        for (t in activeWorkers) { runCatching { t.interrupt() } }
+        activeWorkers.clear()
     }
 
     private fun runAcceptLoop(s: LocalServerSocket) {
@@ -220,12 +258,27 @@ object NativeOffloadServer {
                 return
             }
             Log.d(TAG, "accepted client from proot extension")
-            thread(name = "native-offload-worker", isDaemon = true) {
+            // [F-A3 / OFFLOAD-LIFECYCLE-04] Capture the generation NOW; the
+            // worker refuses to run if the rootfs was switched/reset while the
+            // request sat in the pool queue.
+            val capturedGeneration = rootfsGeneration
+            // [F-A2 fix / P2-41] Bounded pool instead of unbounded
+            // thread-per-client — a flood of offload requests can no longer
+            // spawn unlimited threads.
+            workerPool.execute {
+                val worker = Thread.currentThread()
+                activeWorkers.add(worker)
                 try {
-                    handleClient(client)
+                    if (capturedGeneration != rootfsGeneration) {
+                        Log.w(TAG, "dropping stale request: gen $capturedGeneration != ${rootfsGeneration}")
+                        NativeOffloadResult(125, "native_offload: rootfs changed while request was queued — retry\n")
+                    } else {
+                        handleClient(client)
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "worker error: ${e.message}", e)
                 } finally {
+                    activeWorkers.remove(worker)
                     try { client.close() } catch (_: Exception) {}
                 }
             }
@@ -235,6 +288,10 @@ object NativeOffloadServer {
     private fun handleClient(client: LocalSocket) {
         val input = DataInputStream(client.inputStream)
         val output = DataOutputStream(client.outputStream)
+        // [F-A3 / OFFLOAD-LIFECYCLE-04] Generation at handler-dispatch time:
+        // if the rootfs was reset/moved mid-handler, the reply is not written
+        // into the (possibly deleted) tmp dir of the old generation.
+        val genAtStart = rootfsGeneration
 
         val magic = input.readLEInt()
         if (magic != MAGIC_REQ) {
@@ -273,13 +330,32 @@ object NativeOffloadServer {
             NativeOffloadResult(exitCode = 127, output = "native_offload: no handler for '$name'\n")
         } else {
             try {
-                handler.handle(NativeOffloadRequest(
+                // [F-A2 fix / P2-43] Deadline around every handler: a wedged
+                // handler used to pin its worker forever. The handler thread
+                // is interrupted on timeout; Blocking-IO handlers that ignore
+                // interrupts at least release the pool slot via the finally
+                // in the worker wrapper, and the client gets an error reply.
+                val req = NativeOffloadRequest(
                     pid = pid,
                     argv = argv,
                     env = env,
                     cwd = cwd,
                     sessionId = env["MINIS_CHAT_SESSION_ID"]?.takeIf { it.isNotEmpty() },
-                ))
+                )
+                val future = java.util.concurrent.FutureTask { handler.handle(req) }
+                Thread(future, "offload-handler-watchdog").apply {
+                    isDaemon = true
+                    start()
+                }
+                try {
+                    future.get(HANDLER_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+                } catch (e: java.util.concurrent.TimeoutException) {
+                    future.cancel(true)
+                    Log.w(TAG, "handler '$name' timed out after ${HANDLER_TIMEOUT_MS}ms")
+                    NativeOffloadResult(exitCode = 124, output = "native_offload: handler '$name' timed out\n")
+                } catch (e: java.util.concurrent.ExecutionException) {
+                    throw (e.cause ?: e)
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "handler '$name' threw: ${e.message}", e)
                 NativeOffloadResult(exitCode = 1, output = "native_offload: ${e.message}\n")
@@ -288,10 +364,29 @@ object NativeOffloadServer {
         val elapsedMs = (System.nanoTime() - t0) / 1_000_000
 
         val tmpDir = rootfsTmpDir ?: throw IllegalStateException("server not started")
+        if (genAtStart != rootfsGeneration) {
+            // [F-A3 / OFFLOAD-LIFECYCLE-04] The rootfs this request started
+            // against is gone (reset/move). Do not write into the new
+            // generation's tmp dir — the tracee is dead anyway.
+            Log.w(TAG, "reply discarded: rootfs generation changed during handler '$name'")
+            output.writeLEInt(MAGIC_RSP)
+            output.writeLEInt(125)
+            output.writeLEString("/dev/null")
+            output.flush()
+            return
+        }
         tmpDir.mkdirs()
         val seq = counter.incrementAndGet()
         val tmpHost = File(tmpDir, "$REPLY_PREFIX$pid-$seq")
-        tmpHost.writeText(result.output)
+        // [F-A2 fix / P2-42] Central reply cap — a handler returning a huge
+        // blob wrote it to disk unchecked. Truncate with a marker so the
+        // caller (cat in the guest) still terminates cleanly.
+        val replyText = if (result.output.length > MAX_REPLY_BYTES) {
+            Log.w(TAG, "reply for '$name' truncated: ${result.output.length} chars > $MAX_REPLY_BYTES")
+            result.output.take(MAX_REPLY_BYTES.toInt()) +
+                "\n[native_offload: output truncated at ${MAX_REPLY_BYTES / (1024 * 1024)} MB]"
+        } else result.output
+        tmpHost.writeText(replyText)
         val tmpGuest = "/tmp/${tmpHost.name}"
 
         // [T-android-offload-tmp-leak] Bound growth WITHIN a long-running

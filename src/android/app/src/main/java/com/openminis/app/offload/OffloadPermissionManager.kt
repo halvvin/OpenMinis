@@ -88,6 +88,13 @@ object OffloadPermissionManager {
         // is already authorized.
         ToolPermissionInfo("a11y_cli", "android-a11y-cli", PermissionCategory.INTEGRATIONS, PermissionLevel.NOT_ALLOWED),
         ToolPermissionInfo("shizuku_cli", "android-shizuku-cli", PermissionCategory.INTEGRATIONS, PermissionLevel.NOT_ALLOWED),
+        // [F-A2 / P2-48] The two handlers gated in this round. These run in
+        // the PRIVACY auto-section (not the handcrafted INTEGRATIONS cards),
+        // so they surface in Settings without extra UI plumbing — BYPASS by
+        // default (they back tools the agent exposes anyway), user can
+        // tighten to ASK_ONCE / NOT_ALLOWED.
+        ToolPermissionInfo("model_use", "minis-model-use", PermissionCategory.PRIVACY, PermissionLevel.BYPASS),
+        ToolPermissionInfo("browser_use", "minis-browser-use", PermissionCategory.PRIVACY, PermissionLevel.BYPASS),
     )
 
     /** Stable session-id used by NativeOffloadHandlers when calling
@@ -119,7 +126,19 @@ object OffloadPermissionManager {
     private val _pendingRequest = MutableStateFlow<PermissionRequest?>(null)
     val pendingRequest: StateFlow<PermissionRequest?> = _pendingRequest.asStateFlow()
 
-    private var pendingContinuation: kotlin.coroutines.Continuation<Response>? = null
+    /**
+     * [F-A2 concurrency / P2-27] ASK_ONCE continuations are now keyed by
+     * session+tool. The old single slot meant two concurrent ASK_ONCE
+     * requests (e.g. two chat sessions racing a calendar and a location call)
+     * overwrote each other's continuation: one resumed against the wrong
+     * dialog, the other was lost forever.
+     * The UI can only surface one dialog at a time, so the queue drains in
+     * FIFO order — respondToRequest resolves the HEAD request and the next
+     * waiter's request surfaces via the StateFlow.
+     */
+    private data class PendingAsk(val sessionId: String, val toolName: String)
+    private val pendingAsks = ArrayDeque<PendingAsk>()
+    private val pendingContinuations = mutableMapOf<PendingAsk, kotlin.coroutines.Continuation<Response>>()
 
     // ── Android system runtime permission request (for location etc.) ──────────
 
@@ -311,7 +330,15 @@ object OffloadPermissionManager {
 
     fun getLevel(toolName: String): PermissionLevel {
         val info = toolRegistry.find { it.toolName == toolName }
-            ?: return PermissionLevel.BYPASS // Unknown tools are bypassed
+            // [F-A2 security / P2-28] Fail-CLOSED, not fail-open. The previous
+            // default BYPASS meant an unregistered capability name (typo in a
+            // handler, a future tool added without a registry row) executed
+            // with full privilege and invisible to the Settings UI.
+            // Known-by-name-but-unregistered entries that the system itself
+            // calls are explicitly allowlisted below so legitimate flows
+            // don't break.
+            ?: return if (toolName in INTERNALLY_TRUSTED_TOOLS) PermissionLevel.BYPASS
+                       else PermissionLevel.NOT_ALLOWED
 
         val stored = prefs.getString("level_$toolName", null)
         return if (stored != null) {
@@ -320,6 +347,19 @@ object OffloadPermissionManager {
             info.defaultLevel
         }
     }
+
+    /**
+     * [F-A2 security / P2-28] Capabilities the platform invokes internally
+     * (not model-facing) and which have no reason to appear in the user-facing
+     * permission registry. Anything NOT in the registry and NOT listed here is
+     * now NOT_ALLOWED by default.
+     */
+    private val INTERNALLY_TRUSTED_TOOLS = setOf(
+        // minis-* agent infrastructure invoked by PRoot stubs — policy for
+        // these is governed by their own subsystems, not the offload gate.
+        "minis-config", "minis-browser-use", "minis-sessions-cli",
+        "minis-scheduled", "minis-model-use", "minis-debug",
+    )
 
     fun setLevel(toolName: String, level: PermissionLevel) {
         prefs.edit().putString("level_$toolName", level.name).apply()
@@ -371,16 +411,26 @@ object OffloadPermissionManager {
                 // Show dialog and wait for response.
                 val info = toolRegistry.find { it.toolName == toolName }
                 val response = suspendCancellableCoroutine<Response> { cont ->
-                    pendingContinuation = cont
-                    _pendingRequest.value = PermissionRequest(
-                        toolName = toolName,
-                        toolTitle = toolTitle,
-                        description = "Allow ${info?.displayName ?: toolName} access?",
-                        sessionId = sessionId,
-                    )
+                    val key = PendingAsk(sessionId, toolName)
+                    synchronized(pendingAsks) {
+                        pendingAsks.addLast(key)
+                        pendingContinuations[key] = cont
+                        // Only surface the head of the queue in the UI StateFlow.
+                        if (_pendingRequest.value == null) {
+                            _pendingRequest.value = PermissionRequest(
+                                toolName = toolName,
+                                toolTitle = toolTitle,
+                                description = "Allow ${info?.displayName ?: toolName} access?",
+                                sessionId = sessionId,
+                            )
+                        }
+                    }
                     cont.invokeOnCancellation {
-                        _pendingRequest.value = null
-                        pendingContinuation = null
+                        synchronized(pendingAsks) {
+                            pendingContinuations.remove(key)
+                            pendingAsks.remove(key)
+                            if (pendingAsks.isEmpty()) _pendingRequest.value = null
+                        }
                     }
                 }
 
@@ -401,9 +451,27 @@ object OffloadPermissionManager {
 
     /** Called from UI when user responds to the permission dialog. */
     fun respondToRequest(response: Response) {
-        _pendingRequest.value = null
-        pendingContinuation?.resume(response)
-        pendingContinuation = null
+        val head: PendingAsk
+        val cont: kotlin.coroutines.Continuation<Response>?
+        synchronized(pendingAsks) {
+            head = pendingAsks.removeFirstOrNull() ?: run {
+                _pendingRequest.value = null
+                return
+            }
+            cont = pendingContinuations.remove(head)
+            // Surface the next queued request (if any) for the same dialog.
+            val next = pendingAsks.firstOrNull()
+            _pendingRequest.value = next?.let { k ->
+                val info = toolRegistry.find { it.toolName == k.toolName }
+                PermissionRequest(
+                    toolName = k.toolName,
+                    toolTitle = info?.displayName ?: k.toolName,
+                    description = "Allow ${info?.displayName ?: k.toolName} access?",
+                    sessionId = k.sessionId,
+                )
+            }
+        }
+        cont?.resume(response)
     }
 
     /** Clear session grants AND denials (call when a session ends). */

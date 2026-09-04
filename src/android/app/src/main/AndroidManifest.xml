@@ -20,6 +20,10 @@
          policy, not an OS runtime check, and Minis ships as a sideload.
     -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- [F-A1 manifest fix] FloatingAssistantService declares
+         foregroundServiceType=specialUse (Android 14+ requires both the type
+         attribute AND this permission, otherwise startForeground() throws). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- T50: PARTIAL_WAKE_LOCK held by AgentForegroundService while sessions
          are streaming so Doze + OEM CPU throttling don't stall long shell
          tools after screen-off. -->
@@ -158,6 +162,8 @@
     <application
         android:name=".MinisApp"
         android:allowBackup="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:largeHeap="true"
         android:requestLegacyExternalStorage="true"
         android:preserveLegacyExternalStorage="true"
@@ -447,13 +453,20 @@
         <!-- [T-floating-system] System-wide floating assistant — WindowManager
              overlay so the bubble + panel float over ALL apps. Requires
              SYSTEM_ALERT_WINDOW (declared above) + overlay permission.
-             NOTE: no foregroundServiceType here — 'specialUse' is API 34+
-             and breaks INSTALL on the user's Android 11 device. A plain
-             foreground service works on all API levels. -->
+             [F-A1 manifest fix] Android 14+ (targetSdk 35) throws
+             MissingForegroundServiceTypeException from startForeground() when
+             a started service has NO type and its permission isn't granted.
+             specialUse covers the overlay-assistant use case; the matching
+             FOREGROUND_SERVICE_SPECIAL_USE permission is declared above. -->
         <service
             android:name=".ui.floating.FloatingAssistantService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="floating_ai_assistant_overlay" />
+        </service>
 
         <!-- Alarm broadcast receiver (also handles BOOT_COMPLETED for re-scheduling) -->
         <receiver

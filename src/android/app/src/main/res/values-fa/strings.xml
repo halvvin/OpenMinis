@@ -1325,4 +1325,7 @@
   <string name="browser_downloads_failed">Failed</string>
   <string name="browser_downloads_open">Open</string>
   <string name="provider_no_key_required">No key required</string>
+    <string name="settings_system_permissions_subtitle">داده‌های اصلاح صوتی، تعمیر دسترسی‌پذیری و راهنمای باتری</string>
+    <string name="perm_tool_model_use">استفاده از مدل (فراخوانی هوش مصنوعی)</string>
+    <string name="perm_tool_browser_use">استفاده از مرورگر (اتوماسیون وب)</string>
 </resources>

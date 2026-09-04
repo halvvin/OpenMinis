@@ -38,10 +38,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.TextButton
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -60,7 +60,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.FolderOff
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PushPin
@@ -477,6 +476,8 @@ fun SessionListScreen(
     // confirmation can restate the consequence.
     var folderToDelete by remember { mutableStateOf<Pair<FolderEntity, Int>?>(null) }
     var showBulkDeleteDialog by remember { mutableStateOf(false) }
+    // [F-A1 fix] Bulk export: format picker shown from the selection toolbar.
+    var showBulkExportFormatPicker by remember { mutableStateOf(false) }
     var showOverflowMenu by remember { mutableStateOf(false) }
     var editSession by remember { mutableStateOf<ChatSessionEntity?>(null) }
     var showBrowserSheet by remember { mutableStateOf(false) }
@@ -1069,7 +1070,15 @@ fun SessionListScreen(
                 // Selection toolbar at bottom (matching iOS: Export + Delete)
                 SelectionToolbar(
                     selectedCount = selectedIds.size,
-                    onExport = { /* TODO: export */ },
+                    // [F-A1 fix] Bulk export previously was a silent no-op
+                    // TODO. Now exports every selected chat and shares them
+                    // together (ACTION_SEND_MULTIPLE) in the chosen format.
+                    onExport = {
+                        val ids = selectedIds.toList()
+                        if (ids.isNotEmpty()) {
+                            showBulkExportFormatPicker = true
+                        }
+                    },
                     onMove = { viewModel.requestGroupPickerForSelection() },
                     onDelete = { showBulkDeleteDialog = true },
                     modifier = Modifier.align(Alignment.BottomCenter),
@@ -1140,13 +1149,43 @@ fun SessionListScreen(
     // Bulk delete confirmation
     if (showBulkDeleteDialog) {
         MinisAlertDialog(
-            onDismissRequest = { showBulkDeleteDialog = false },
+            onDismissRequest = { showBulkExportFormatPicker = false; showBulkDeleteDialog = false },
             title = stringResource(R.string.sessionlist_delete_n_title, selectedIds.size),
             confirmText = stringResource(R.string.delete),
             isDestructive = true,
             onConfirm = {
                 viewModel.deleteSelected()
                 showBulkDeleteDialog = false
+            },
+        )
+    }
+
+    // [F-A1 fix] Bulk export format picker (JSON / plain text), same options
+    // as the single-session export menu. Exports every selected chat and
+    // shares all the produced zips in one ACTION_SEND_MULTIPLE chooser.
+    if (showBulkExportFormatPicker) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showBulkExportFormatPicker = false },
+            title = { Text(stringResource(R.string.sessionlist_export)) },
+            text = {
+                Column {
+                    listOf(
+                        "json" to stringResource(R.string.sessionlist_export_json),
+                        "txt" to stringResource(R.string.sessionlist_export_plain),
+                    ).forEach { (fmt, label) ->
+                        TextButton(onClick = {
+                            showBulkExportFormatPicker = false
+                            exportBulkSelection(context, selectedIds.toList(), chatRepository, scope, fmt)
+                        }) {
+                            Text(label, modifier = Modifier.padding(start = 24.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showBulkExportFormatPicker = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
             },
         )
     }
@@ -3010,14 +3049,70 @@ internal fun SessionEditSheet(
  * share sheet as a real file attachment. Peak memory stays bounded by
  * batch size regardless of session length.
  */
+/**
+ * [F-A1 fix] Bulk export for the selection toolbar. Exports every selected
+ * session to its own zip via [ChatExporter.exportToZip] and shares all of
+ * them in a single ACTION_SEND_MULTIPLE chooser (the previous button was a
+ * silent `/* TODO: export *​/` no-op).
+ */
+private fun exportBulkSelection(
+    context: Context,
+    sessionIds: List<String>,
+    chatRepository: ChatRepository,
+    scope: kotlinx.coroutines.CoroutineScope,
+    format: String,
+) {
+    scope.launch {
+        try {
+            val uris = mutableListOf<android.net.Uri>()
+            for (id in sessionIds) {
+                val session = chatRepository.getSession(id) ?: continue
+                val (uri, _) = com.openminis.app.share.ChatExporter.exportToZip(
+                    context = context,
+                    session = session,
+                    repository = chatRepository,
+                    format = format,
+                )
+                uris.add(uri)
+            }
+            if (uris.isEmpty()) {
+                android.widget.Toast.makeText(
+                    context,
+                    context.getString(R.string.export_progress_failed),
+                    android.widget.Toast.LENGTH_LONG,
+                ).show()
+                return@launch
+            }
+            val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = "application/zip"
+                putParcelableArrayListExtra(
+                    Intent.EXTRA_STREAM,
+                    ArrayList(uris),
+                )
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = Intent.createChooser(
+                intent,
+                context.getString(R.string.sessionlist_export),
+            ).apply { addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            context.startActivity(chooser)
+        } catch (t: Throwable) {
+            android.widget.Toast.makeText(
+                context,
+                context.getString(R.string.export_progress_failed),
+                android.widget.Toast.LENGTH_LONG,
+            ).show()
+        }
+    }
+}
+
 private fun exportSession(
     context: Context,
     session: ChatSessionEntity,
     chatRepository: ChatRepository,
     scope: kotlinx.coroutines.CoroutineScope,
     format: String,
-) {
-    scope.launch {
+) {    scope.launch {
         try {
             val (uri, _) = com.openminis.app.share.ChatExporter.exportToZip(
                 context = context,

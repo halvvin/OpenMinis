@@ -95,6 +95,16 @@ jobs:
           "$APKSIGNER" verify "$APK"
           echo "signature verified ✓ on $APK"
 
+      # [F-A1 packaging fix] DT_NEEDED closure check on the FINAL APK.
+      # A missing non-system libproot dependency (libtalloc.so.2 /
+      # libandroid-shmem.so) assembles fine but breaks every shell command
+      # on device ("proot exit=1"). Fail the build instead of shipping it.
+      - name: Verify native dependency closure (DT_NEEDED)
+        run: |
+          APK=$(ls src/android/app/build/outputs/apk/debug/*.apk | head -1)
+          chmod +x scripts/verify_apk_native.sh
+          ./scripts/verify_apk_native.sh "$APK"
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:

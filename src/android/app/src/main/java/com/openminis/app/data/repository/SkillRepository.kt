@@ -468,10 +468,16 @@ class SkillRepository(private val context: Context) {
                 relativePath = relativePath.drop(prefix.length)
             }
             if (relativePath == "SKILL.md" || relativePath.startsWith(".") || relativePath.isEmpty()) continue
-            // Guard against zip-slip: reject path traversal.
-            if (relativePath.contains("..")) continue
-
-            val destFile = File(skillDir, relativePath)
+            // [F-A2 security] Zip-slip guard upgraded (P2-34): the old
+            // `contains("..")` check missed absolute paths, drive letters,
+            // and backslash separators. ZipSafety.safeChild proves canonical
+            // containment; a budget bounds extraction-bomb archives.
+            val destFile = try {
+                com.openminis.app.util.ZipSafety.safeChild(skillDir, relativePath)
+            } catch (e: java.io.IOException) {
+                Log.w(TAG, "Blocked zip entry: ${e.message}")
+                continue
+            }
             destFile.parentFile?.mkdirs()
             try { destFile.writeBytes(entry.data) } catch (e: Exception) {
                 Log.w(TAG, "Failed to write $relativePath: ${e.message}")

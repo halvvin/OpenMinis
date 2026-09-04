@@ -182,6 +182,21 @@ object CrossChatTools {
                 return@withContext ToolExecutionResult("Error: that IS the current chat (self-target blocked). Just reply normally.", false)
             }
             val labelled = "[از چت «${sourceTitle.ifBlank { "چت دیگر" }}»]\n$text"
+            // [F-A3 / CROSSCHAT-IDEMPOTENCY-01] Exact-retry suppression: a
+            // recovery replay re-issues byte-identical args within a short
+            // window; appending again would duplicate the message. Atomic
+            // check+record in the ledger (10 min window).
+            if (com.openminis.app.agent.ExecutionLedger.noteSideEffect(
+                    context, "chat_send", "$sourceSessionId|$title|$asUser|$text",
+                    windowMs = 10 * 60_000L,
+                )
+            ) {
+                log(context, "chat_send DUPLICATE suppressed → '$title'")
+                return@withContext ToolExecutionResult(
+                    "Blocked: this exact message was already delivered to \"$title\" within the last 10 minutes (duplicate suppressed). If you really need to send it again, change the text.",
+                    false,
+                )
+            }
             repo.appendMessage(target.id, if (asUser) "user" else "assistant", JSONArray().put(JSONObject().put("text", labelled)).toString())
             log(context, "chat_send → '$title' (${text.length} chars, asUser=$asUser)")
             ToolExecutionResult("Delivered to chat \"$title\" ✓", true)

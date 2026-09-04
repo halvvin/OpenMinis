@@ -3,6 +3,7 @@ package com.openminis.app.tools
 import android.content.Context
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.sandbox.PRootKernel
 import org.json.JSONObject
 import java.io.File
 
@@ -41,7 +42,7 @@ object FileSearchTool {
         if (pattern.isEmpty()) {
             return ToolExecutionResult("Error: 'pattern' is required.", false, toolTitle = toolTitle)
         }
-        val base = resolveBase(baseArg)
+        val base = resolveBase(baseArg, context)
             ?: return ToolExecutionResult("Error: Invalid base: $baseArg (use /var/minis or /sdcard paths).", false, toolTitle = toolTitle)
         if (!base.exists()) {
             return ToolExecutionResult("Error: Base folder not found: $baseArg", false, toolTitle = toolTitle)
@@ -64,8 +65,12 @@ object FileSearchTool {
         return ToolExecutionResult(sb.toString().trim(), true, toolTitle = toolTitle)
     }
 
-    private fun resolveBase(arg: String): File? = when {
-        arg.startsWith("/var/minis") -> File(arg)
+    private fun resolveBase(arg: String, context: Context): File? = when {
+        // [F-A2 fix / MOUNT-FILEOPS-01] Same /var/minis host-mapping fix as
+        // FileOpsTool: guest paths resolve through the session-aware resolver
+        // instead of a host path that never exists.
+        arg.startsWith("/var/minis") -> PRootKernel.resolveSessionHostPath("floating-assistant", arg, context)
+            ?: PRootKernel.resolveHostPath(arg)
         arg.startsWith("/sdcard") -> File("/storage/emulated/0" + arg.substringAfter("/sdcard"))
         arg.startsWith("/storage/emulated/0") -> File(arg)
         else -> null

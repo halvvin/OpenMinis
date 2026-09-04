@@ -551,6 +551,12 @@ class MinisApp : Application(), ImageLoaderFactory {
             )
         }
 
+        // [F-A3 / P1-01] Startup reconciliation BEFORE anything can begin new
+        // executions: RUNNING ledger entries from the previous process are
+        // ambiguous (side effect may have landed, result not persisted) and
+        // are marked INTERRUPTED exactly once per process.
+        com.openminis.app.agent.ExecutionLedger.markInterruptedAtStartup(this)
+
         // [T-fork-socket-namespace] Namespace the abstract offload socket by
         // applicationId BEFORE the server binds, so this fork never collides
         // with the official Minis app (both would fight over 'native-offload').

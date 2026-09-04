@@ -53,6 +53,8 @@ class MemoryRepository(private val memoryDir: File) {
      * New entries are prepended (newest first).
      * Returns a success/error message string.
      */
+    private val memoryWriteLock = Any()
+
     fun writeMemory(content: String): String {
         if (content.isBlank()) return "Error: Missing required 'content' parameter"
 
@@ -64,16 +66,22 @@ class MemoryRepository(private val memoryDir: File) {
         val timestamp = timeFmt.format(Date())
         val entry = "<!-- $timestamp -->\n$content\n\n"
 
-        val existing = if (file.exists()) file.readText() else ""
-        val newContent = entry + existing
+        // [F-A2 fix / P2-14] The read-modify-write (read existing, prepend,
+        // write back) now holds a process-wide lock. Two concurrent writers
+        // (e.g. two parallel agent tool calls, or tool + UI sheet) previously
+        // raced and one entry was lost.
+        synchronized(memoryWriteLock) {
+            val existing = if (file.exists()) file.readText() else ""
+            val newContent = entry + existing
 
-        return try {
-            file.writeText(newContent)
-            Log.i(TAG, "Memory written to $fileName (${content.length} chars)")
-            "Memory saved to $fileName (${content.length} chars)"
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to write memory", e)
-            "Error writing memory: ${e.message}"
+            return try {
+                file.writeText(newContent)
+                Log.i(TAG, "Memory written to $fileName (${content.length} chars)")
+                "Memory saved to $fileName (${content.length} chars)"
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to write memory", e)
+                "Error writing memory: ${e.message}"
+            }
         }
     }
 
@@ -406,6 +414,9 @@ class MemoryRepository(private val memoryDir: File) {
      * memory and shouldn't be silently mutated by an undo button.
      */
     fun revokeEntry(writtenContent: String): EntryMutationResult {
+        // [F-A2 fix / P2-14] Same RMW race class as writeMemory.
+        synchronized(memoryWriteLock) {
+        // --- original body (indented by the lock scope) ---
         val trimmedTarget = writtenContent.trim()
         val candidates = candidateDateStrings()
         val markerRegex = Regex("""<!-- \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} -->\n""")
@@ -436,6 +447,7 @@ class MemoryRepository(private val memoryDir: File) {
             }
         }
         return EntryMutationResult.NotFound
+        } // synchronized(memoryWriteLock)
     }
 
     /**

@@ -34,6 +34,15 @@ object PRootKernel {
     /** Single lifecycle gate: prevents concurrent boot/shutdown races. */
     private val lifecycleMutex = Mutex()
 
+    /**
+     * [F-A2 fix / P1-06] Run [block] while holding the same lifecycle mutex
+     * that guards boot()/shutdown(). Rootfs move/reset flows take this so a
+     * concurrent boot cannot start against a tree being relocated. The block
+     * runs with the sandbox already shut down by the caller.
+     */
+    suspend fun <T> lifecycleMutexHeld(block: suspend () -> T): T =
+        lifecycleMutex.withLock { block() }
+
     /** Path to native library directory (for LD_LIBRARY_PATH). */
     var nativeLibDir: String = ""
         private set
@@ -741,7 +750,28 @@ object PRootKernel {
         if (subdir !in perSessionSubdirs) return resolveHostPath(linuxPath)
         val sessionBase = File(context.filesDir, "minis-sessions/$sessionId/$subdir")
         val tail = if (slash < 0) "" else rest.substring(slash + 1)
-        return if (tail.isEmpty()) sessionBase else File(sessionBase, tail)
+        if (tail.isEmpty()) return sessionBase
+        // [F-A2 security / P1-02] Canonical containment proof. The previous
+        // `File(sessionBase, tail)` accepted `..` segments (e.g.
+        // /var/minis/workspace/../../shared_prefs) and let a model-crafted
+        // path escape the per-session directory. Build via ZipSafety's shared
+        // containment logic (throws on escape) and return null for escapes,
+        // mirroring the "no matching mount" behaviour callers already handle.
+        return try {
+            // Per-session dirs are not ZIP-specific; the containment check is
+            // the same shape, so reuse it and give it a dedicated wrapper.
+            val candidate = File(sessionBase, tail)
+            val baseCanon = sessionBase.canonicalPath + File.separator
+            val candCanon = candidate.canonicalPath
+            if (candCanon == baseCanon.removeSuffix(File.separator) || candCanon.startsWith(baseCanon)) {
+                candidate
+            } else {
+                Log.w(TAG, "resolveSessionHostPath: blocked traversal '$linuxPath' (session=$sessionId)")
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     /**
@@ -754,10 +784,18 @@ object PRootKernel {
             if (linuxPath == mountPoint || linuxPath.startsWith("$mountPoint/")) {
                 val hostBase = _bindMounts[mountPoint]!!
                 val relativePath = linuxPath.removePrefix(mountPoint).removePrefix("/")
-                return if (relativePath.isEmpty()) {
-                    File(hostBase)
+                // [F-A2 security / MOUNT-PREFIX-01] The "/"-guarded prefix
+                // match above already blocks sibling-directory confusion, but
+                // the RELATIVE tail can still carry `..` segments that escape
+                // the bind root. Enforce canonical containment before returning.
+                if (relativePath.isEmpty()) return File(hostBase)
+                val candidate = File(hostBase, relativePath)
+                val baseCanon = File(hostBase).canonicalPath + File.separator
+                return if (candidate.canonicalPath.startsWith(baseCanon)) {
+                    candidate
                 } else {
-                    File(hostBase, relativePath)
+                    Log.w(TAG, "resolveHostPath: blocked traversal '$linuxPath' (mount=$mountPoint)")
+                    null
                 }
             }
         }

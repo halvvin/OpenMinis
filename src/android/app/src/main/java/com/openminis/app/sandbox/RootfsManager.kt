@@ -122,31 +122,38 @@ class RootfsManager private constructor(private val context: Context) {
             return@withContext true
         }
 
-        try {
-            if (src.exists()) {
-                val staging = File(target.parentFile, "alpine-rootfs.moving")
-                if (staging.exists()) staging.deleteRecursively()
-                staging.mkdirs()
-                src.copyRecursively(staging, overwrite = true)
-                if (calculateDirSize(src) != calculateDirSize(staging)) {
-                    staging.deleteRecursively()
-                    return@withContext false
+        // [F-A2 fix / P1-06] Take the SAME PRoot lifecycle lock boot()/shutdown()
+        // use and stop the sandbox before mutating the tree. Without this, a
+        // move racing an active PRoot/offload worker could copy a live tree,
+        // or a boot could start against the directory being deleted.
+        PRootKernel.lifecycleMutexHeld {
+            PRootKernel.shutdown(context, stopOffloadServer = true)
+            try {
+                if (src.exists()) {
+                    val staging = File(target.parentFile, "alpine-rootfs.moving")
+                    if (staging.exists()) staging.deleteRecursively()
+                    staging.mkdirs()
+                    src.copyRecursively(staging, overwrite = true)
+                    if (calculateDirSize(src) != calculateDirSize(staging)) {
+                        staging.deleteRecursively()
+                        return@lifecycleMutexHeld false
+                    }
+                    src.deleteRecursively()
+                    if (!staging.renameTo(target)) {
+                        // Restore from staging rename failure: move staging back.
+                        staging.renameTo(src)
+                        return@lifecycleMutexHeld false
+                    }
+                } else {
+                    target.mkdirs()
                 }
-                src.deleteRecursively()
-                if (!staging.renameTo(target)) {
-                    // Restore from staging rename failure: move staging back.
-                    staging.renameTo(src)
-                    return@withContext false
-                }
-            } else {
-                target.mkdirs()
+                locationPrefs.edit().putBoolean("use_external", toExternal).apply()
+                true
+            } catch (t: Throwable) {
+                Log.e(TAG, "moveRootfs(toExternal=$toExternal) failed", t)
+                File(target.parentFile, "alpine-rootfs.moving").deleteRecursively()
+                false
             }
-            locationPrefs.edit().putBoolean("use_external", toExternal).apply()
-            true
-        } catch (t: Throwable) {
-            Log.e(TAG, "moveRootfs(toExternal=$toExternal) failed", t)
-            File(target.parentFile, "alpine-rootfs.moving").deleteRecursively()
-            false
         }
     }
 

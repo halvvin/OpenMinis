@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [F-A1 security] Auto-backup rules (Android 12+ dataExtractionRules +
+     legacy fullBackupContent for < 31). The app holds secrets in prefs
+     (provider API keys / OAuth / env vars / WebDAV password / AlwaysOn SSH
+     secret / floating history); none of those may leave the device via
+     adb backup or cloud transfer. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="."/>
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="."/>
+    </device-transfer>
+    <adb-backup>
+        <exclude domain="sharedpref" path="."/>
+    </adb-backup>
+</data-extraction-rules>
