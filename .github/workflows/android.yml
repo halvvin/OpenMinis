@@ -101,10 +101,11 @@ jobs:
       # on device ("proot exit=1"). Fail the build instead of shipping it.
       - name: Verify native dependency closure (DT_NEEDED)
         run: |
-          # working-directory is src/android — APK under app/build, script at repo root
-          APK=$(ls app/build/outputs/apk/debug/*.apk | head -1)
-          chmod +x ../scripts/verify_apk_native.sh
-          ../scripts/verify_apk_native.sh "$APK"
+          set -e
+          REPO_ROOT="$GITHUB_WORKSPACE"
+          APK=$(ls "$REPO_ROOT"/src/android/app/build/outputs/apk/debug/*.apk | head -1)
+          chmod +x "$REPO_ROOT/scripts/verify_apk_native.sh"
+          "$REPO_ROOT/scripts/verify_apk_native.sh" "$APK"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
