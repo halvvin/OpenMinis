@@ -103,7 +103,7 @@ object FileOpsTool {
     }
 
     /** Resolve an app-path or /sdcard path to a real File. */
-    private fun resolve(path: String): File? {
+    private fun resolve(path: String, context: Context): File? {
         return when {
             // [F-A2 fix / MOUNT-FILEOPS-01] /var/minis/... is a GUEST path —
             // on the host these live under filesDir/minis-global (shared dirs)

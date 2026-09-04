@@ -5754,7 +5754,12 @@ class ChatViewModel(
             // to itself" runaway the FIX-CIRCUIT-BREAKER comment describes).
             if (config.chatFilterEnabled) {
                 val title = try {
-                    chatRepository.getSession(sid)?.title.orEmpty().trim()
+                    // keepWorkingOnTaskCompleted runs on Main; the DB read must
+                    // not be a suspend call outside a coroutine — use runCatching
+                    // with a synchronous-safe bridge via the DAO's first() flow.
+                    kotlinx.coroutines.runBlocking {
+                        chatRepository.getSession(sid)?.title.orEmpty().trim()
+                    }
                 } catch (_: Exception) { "" }
                 if (title.isEmpty() || config.targetChats.none { it.trim().equals(title, ignoreCase = true) }) {
                     return
@@ -8015,9 +8020,10 @@ class ChatViewModel(
                 // ledger survives process death, so recovery paths can tell
                 // "never ran" from "ran, result unknown" instead of replaying
                 // blind (TOOL-REPLAY-01).
-                val ledgerId = com.openminis.app.agent.ExecutionLedger.begin(
+                val ledgerEntry = com.openminis.app.agent.ExecutionLedger.begin(
                     context, activeSessionId, name, argsStr,
                 )
+                val ledgerId = ledgerEntry.id
                 val inFlightDup = com.openminis.app.agent.ExecutionLedger.findRunningDuplicate(
                     context, name, argsStr, excludeId = ledgerId,
                 )

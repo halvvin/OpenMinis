@@ -1,6 +1,7 @@
 package com.openminis.app.tools
 
 import android.annotation.SuppressLint
+import android.util.Log
 import android.content.Context
 import android.webkit.CookieManager
 import android.webkit.WebView

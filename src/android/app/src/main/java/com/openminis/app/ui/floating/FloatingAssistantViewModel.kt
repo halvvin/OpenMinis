@@ -335,7 +335,8 @@ class FloatingAssistantViewModel(
         return com.openminis.app.tools.AgentTools.makeAgentTools(
             supportsImageInput = supportsImage,
             visionGroupConfigured = runCatching {
-                com.openminis.app.tools.VisionGroupResolver.isConfigured(providerRepo(), appContext)
+                val repo = providerRepo()
+                repo != null && com.openminis.app.tools.VisionGroupResolver.isConfigured(repo, appContext)
             }.getOrDefault(false),
             memoryEnabled = true,
             termuxEnabled = prefs.termuxEnabled,

@@ -90,7 +90,7 @@ fun SettingsScreen(
     // [F-A1 fix] onSystemPermissionsClick: previously not declared at all,
     // so the (otherwise orphaned) SystemPermissionsScreen could never be
     // opened from Settings. Default no-op keeps older callers compiling.
-    val onSystemPermissionsClick: () -> Unit = {},
+    onSystemPermissionsClick: () -> Unit = {},
     onMcpClick: () -> Unit = {},
     // [T-soul-md] Soul settings page lives between Skills and Memory in the
     // Agent Runtime section; default no-op for callers that haven't wired
