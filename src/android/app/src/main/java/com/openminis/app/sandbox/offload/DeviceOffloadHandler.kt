@@ -69,9 +69,31 @@ class DeviceOffloadHandler(private val context: Context) : NativeOffloadHandler 
             .put("hardware", Build.HARDWARE.orFallback("unknown"))
             .put("supported_abis", runCatching { Build.SUPPORTED_ABIS.joinToString(", ") }.getOrDefault(""))
             .put("available_processors", runtime.availableProcessors())
-            .put("total_memory_mb", runtime.totalMemory() / (1024 * 1024))
-            .put("free_memory_mb", runtime.freeMemory() / (1024 * 1024))
-            .put("max_memory_mb", runtime.maxMemory() / (1024 * 1024))
+            // [fix] runtime.totalMemory() is the CURRENT JVM heap (grows on
+            // demand — 29MB right after boot), not device RAM. Report the
+            // real hardware values from ActivityManager + the JVM heap
+            // separately.
+            .put("total_memory_mb", runCatching {
+                val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                val mem = android.app.ActivityManager.MemoryInfo()
+                am.getMemoryInfo(mem)
+                mem.totalMem / (1024 * 1024)
+            }.getOrDefault(runtime.totalMemory() / (1024 * 1024)))
+            .put("available_memory_mb", runCatching {
+                val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                val mem = android.app.ActivityManager.MemoryInfo()
+                am.getMemoryInfo(mem)
+                mem.availMem / (1024 * 1024)
+            }.getOrDefault(runtime.freeMemory() / (1024 * 1024)))
+            .put("jvm_heap_max_mb", runtime.maxMemory() / (1024 * 1024))
+            .put("jvm_heap_total_mb", runtime.totalMemory() / (1024 * 1024))
+            .put("jvm_heap_free_mb", runtime.freeMemory() / (1024 * 1024))
+            .put("low_memory_flag", runCatching {
+                val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                val mem = android.app.ActivityManager.MemoryInfo()
+                am.getMemoryInfo(mem)
+                mem.lowMemory
+            }.getOrDefault(false))
     }
 
     private fun batteryInfo(): JSONObject {
