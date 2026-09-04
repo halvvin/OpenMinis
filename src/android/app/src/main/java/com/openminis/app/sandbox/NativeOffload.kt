@@ -101,7 +101,7 @@ object NativeOffloadServer {
     // in-flight workers kept running against a possibly-stale rootfsTmpDir.
     // A fixed pool caps concurrency; an active-workers registry lets stop()
     // interrupt them; a watchdog timeout bounds any wedged handler.
-    private val workerPool = java.util.concurrent.newFixedThreadPool(8)
+    private val workerPool = java.util.concurrent.Executors.newFixedThreadPool(8)
     private val activeWorkers = java.util.Collections.newSetFromMap(
         java.util.concurrent.ConcurrentHashMap<Thread, Boolean>())
 

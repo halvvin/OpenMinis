@@ -127,4 +127,11 @@ object AlwaysOnEngine {
         return if (r.output.contains("__SSH_OK__")) CheckResult(true, "ssh ready")
         else CheckResult(false, "نصب openssh-client در سندباکس ناموفق بود:\n${r.output.take(400)}")
     }
+
+    /** Single-quote a shell argument (doubles embedded single quotes). */
+    private fun q(v: String): String = "'" + v.replace("'", "'\\''") + "'"
+
+    /** [F-A3 / SSH-SECURITY-01] Per-host known_hosts dir inside the guest. */
+    private fun knownHostsDir(host: String): String =
+        "/var/minis/shared/.ssh_" + host.replace(Regex("[^A-Za-z0-9._-]"), "_")
 }

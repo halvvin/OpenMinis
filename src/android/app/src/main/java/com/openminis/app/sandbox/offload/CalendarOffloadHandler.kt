@@ -292,8 +292,10 @@ class CalendarOffloadHandler(private val context: Context) : NativeOffloadHandle
                 return NativeOffloadResult(
                     1,
                     OffloadOutput.formatBody(
-                        JSONObject().put("error", "duplicate_suppressed")
-                            .put("message", "An identical event (same title/start/end) was created within the last 10 minutes. Duplicate suppressed."),
+                        JSONObject()
+                            .put("error", "duplicate_suppressed")
+                            .put("message", "An identical event (same title/start/end) was created within the last 10 minutes. Duplicate suppressed.")
+                            .toString(),
                         args,
                     ) + "\n",
                 )

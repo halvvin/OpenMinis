@@ -180,6 +180,9 @@ class AutomationPrefs private constructor(context: Context) {
         private const val KEY_AO_HOST = "ao.host"
         private const val KEY_AO_PORT = "ao.port"
         private const val KEY_AO_USER = "ao.user"
+        // [F-A1 security] Same key name as before, but now used against the
+        // ENCRYPTED "automation_secure" prefs file (see alwaysOnSecret).
+        private const val KEY_AO_SECRET = "ao.secret"
         // [F-A1 security] KEY_AO_SECRET now lives in the encrypted
         // "automation_secure" prefs file, not in the plaintext store.
         private const val KEY_AO_SSH = "ao.use_ssh"

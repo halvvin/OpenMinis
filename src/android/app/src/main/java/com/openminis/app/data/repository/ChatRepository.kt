@@ -383,7 +383,9 @@ class ChatRepository(internal val dao: ChatDao) {
             sortOrder = 0, // assigned inside the transaction by the DAO
             reasoningContent = reasoningContent,
         )
-        return dao.appendMessageAtomic(message) { preview -> extractTextPreview(preview) }
+        return dao.appendMessageAtomic(message) { preview ->
+            extractTextPreview(preview) ?: ""
+        }
     }
 
     /**
