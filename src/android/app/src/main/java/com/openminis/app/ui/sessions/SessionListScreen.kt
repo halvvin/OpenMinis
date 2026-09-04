@@ -3053,7 +3053,7 @@ internal fun SessionEditSheet(
  * [F-A1 fix] Bulk export for the selection toolbar. Exports every selected
  * session to its own zip via [ChatExporter.exportToZip] and shares all of
  * them in a single ACTION_SEND_MULTIPLE chooser (the previous button was a
- * silent `/* TODO: export *​/` no-op).
+ * silent TODO no-op).
  */
 private fun exportBulkSelection(
     context: Context,

@@ -54,7 +54,8 @@ class BrowserUseOffloadHandler(private val app: MinisApp) : NativeOffloadHandler
         if (!args.hasFlag("h", "help")) {
             OffloadGate.enforce("browser_use", "minis-browser-use", args, request)?.let { return it }
         }
-        val compact = args.hasFlag("compact")        val quiet = args.hasFlag("q", "quiet")
+        val compact = args.hasFlag("compact")
+        val quiet = args.hasFlag("q", "quiet")
         val withBase64 = args.hasFlag("with-base64", "with_base64")
 
         // Bare invocation / --help: exit 0 with help (matches iOS). iOS writes
