@@ -111,11 +111,16 @@ class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner, Vi
         }
         layoutParams = params
         // [B5 fix] One UI hides non-system overlays above secure surfaces
-        // (main Settings app etc.). setHideNonSystemOverlayWindows(false)
-        // (API 34+) opts the bubble OUT of that hiding; on older APIs the
-        // flag doesn't exist and hiding is not enforced anyway.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            layoutParams.setHideNonSystemOverlayWindows(false)
+        // (main Settings app etc.). LayoutParams.hideNonSystemOverlayWindows
+        // (API 34+) opts the bubble OUT of that hiding. Referenced via
+        // reflection — the setter exists on some compile targets but not
+        // others, and reflection keeps this compileable on every SDK.
+        if (Build.VERSION.SDK_INT >= 34) {
+            runCatching {
+                layoutParams.javaClass
+                    .getMethod("setHideNonSystemOverlayWindows", Boolean::class.javaPrimitiveType)
+                    .invoke(layoutParams, false)
+            }
         }
         // Touch the lazy delegate BEFORE setContent so the VM exists (and its
         // model-loading poller is running) before the first frame renders.
