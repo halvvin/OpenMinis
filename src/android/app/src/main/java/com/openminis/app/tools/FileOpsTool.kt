@@ -82,7 +82,7 @@ object FileOpsTool {
                     }
                 }
                 "move", "rename", "copy" -> {
-                    val targetFile = resolve(target, context)
+                    val targetFile = resolve(target, sessionId, context)
                         ?: return ToolExecutionResult("Error: Invalid target: $target", false, toolTitle = toolTitle)
                     if (targetFile.exists()) {
                         return ToolExecutionResult("⚠️ مقصد از قبل وجود دارد: $target — اول حذفش کن یا نام دیگری انتخاب کن.", false, toolTitle = toolTitle)

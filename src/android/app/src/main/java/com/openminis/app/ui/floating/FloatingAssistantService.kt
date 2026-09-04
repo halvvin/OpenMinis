@@ -99,14 +99,9 @@ class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner, Vi
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    // [B5 fix] The bubble vanished over certain system screens
-                    // (One UI hides non-system overlays above secure surfaces
-                    // like the main Settings app). These two flags keep the
-                    // overlay visible: NO_HIDE allows rendering above those
-                    // surfaces, WATCH_OUTSIDE keeps touch routing stable when
-                    // the system window takes focus.
-                    WindowManager.LayoutParams.FLAG_NOT_HIDE_NON_SYSTEM_OVERLAY_WINDOWS or
-                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE,
+                    // [B5 companion] Extend beyond screen bounds without
+                    // clipping while system chrome animates.
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -115,6 +110,13 @@ class FloatingAssistantService : LifecycleService(), SavedStateRegistryOwner, Vi
             softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
         }
         layoutParams = params
+        // [B5 fix] One UI hides non-system overlays above secure surfaces
+        // (main Settings app etc.). setHideNonSystemOverlayWindows(false)
+        // (API 34+) opts the bubble OUT of that hiding; on older APIs the
+        // flag doesn't exist and hiding is not enforced anyway.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            layoutParams.setHideNonSystemOverlayWindows(false)
+        }
         // Touch the lazy delegate BEFORE setContent so the VM exists (and its
         // model-loading poller is running) before the first frame renders.
         val vm = service.assistantViewModel
