@@ -152,6 +152,21 @@ fun AssistantSettingsScreen(onBack: () -> Unit) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+
+            // [B7] Android force-stop puts the app in stopped-state: the OS
+            // will NOT deliver BOOT_COMPLETED or restart the service until the
+            // user opens the app once. Tell them instead of leaving the
+            // toggle looking broken after "App info → Force stop".
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "اگر از «توقف اجباری» (Force stop) در تنظیمات اندروید استفاده کرده باشید، " +
+                            "اندروید تا باز کردن بعدیِ اپ هیچ سرویسی — از جمله دستیار شناور — را " +
+                            "اجرا نمی‌کند. کافی است یک‌بار اپ را باز کنید تا دستیار دوباره بالا بیاید.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
         }
     }
 }

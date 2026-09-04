@@ -557,6 +557,27 @@ class MinisApp : Application(), ImageLoaderFactory {
         // are marked INTERRUPTED exactly once per process.
         com.openminis.app.agent.ExecutionLedger.markInterruptedAtStartup(this)
 
+        // [B6 fix] The floating assistant used to come back ONLY via
+        // BOOT_COMPLETED — after the user simply OPENED the app (process was
+        // silently killed by the OS, or the toggle stayed ON across an
+        // upgrade), the service stayed dead while the settings switch kept
+        // showing ON. Relaunch is a legitimate restart path: re-arm here.
+        // canDrawOverlays is re-checked because the user may have revoked the
+        // overlay permission since the last run.
+        try {
+            val prefsFA = com.openminis.app.automation.AutomationPrefs.get(this)
+            if (prefsFA.assistantEnabled &&
+                android.provider.Settings.canDrawOverlays(this)
+            ) {
+                startForegroundService(
+                    Intent(this, com.openminis.app.ui.floating.FloatingAssistantService::class.java),
+                )
+                Log.i("MinisApp", "B6: floating assistant re-armed on app relaunch")
+            }
+        } catch (t: Throwable) {
+            Log.w("MinisApp", "B6: floating assistant relaunch re-arm failed: ${t.message}")
+        }
+
         // [T-fork-socket-namespace] Namespace the abstract offload socket by
         // applicationId BEFORE the server binds, so this fork never collides
         // with the official Minis app (both would fight over 'native-offload').

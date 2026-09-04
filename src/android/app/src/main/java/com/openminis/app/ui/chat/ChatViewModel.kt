@@ -8360,7 +8360,7 @@ class ChatViewModel(
             }
             // [T-assistant-tools] Real device tools (always available).
             DownloadTool.NAME -> DownloadTool.execute(argsJson, context)
-            FileOpsTool.NAME -> FileOpsTool.execute(argsJson, context)
+            FileOpsTool.NAME -> FileOpsTool.execute(argsJson, activeSessionId, context)
             PdfTool.NAME -> PdfTool.execute(argsJson, context)
             TranslateTool.NAME -> TranslateTool.execute(
                 argsJson, providerRepository, _activeEntryId.value.orEmpty(), context,
@@ -8368,7 +8368,7 @@ class ChatViewModel(
             WebExtractTool.NAME -> WebExtractTool.execute(argsJson, context)
             OcrTool.NAME -> OcrTool.execute(argsJson, context)
             WebSearchTool.NAME -> WebSearchTool.execute(argsJson, context)
-            FileSearchTool.NAME -> FileSearchTool.execute(argsJson, context)
+            FileSearchTool.NAME -> FileSearchTool.execute(argsJson, activeSessionId, context)
             ArchiveTool.NAME -> ArchiveTool.execute(argsJson, context)
             // [F-A3 / Master Prompt] Durable Task Engine tools.
             com.openminis.app.tasks.TaskTools.TASK_CREATE ->

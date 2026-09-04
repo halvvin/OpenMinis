@@ -178,7 +178,13 @@ class FloatingAssistantViewModel(
             return
         }
         busy.value = true
-        loopJob = viewModelScope.launch {
+        // [fix] NetworkOnMainThreadException: viewModelScope defaults to
+        // Dispatchers.Main, and streamMessage's collect performs real network
+        // I/O (Provider HTTP). The main chat's send path escalates to IO
+        // upstream — this VM must do the same for the whole loop. StateFlow
+        // writes below are thread-safe, and persistHistory() benefits from
+        // being off the main thread too.
+        loopJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 runAgentLoop(entry)
             } catch (e: CancellationException) {
@@ -353,7 +359,7 @@ class FloatingAssistantViewModel(
             FileWriteTool.NAME -> FileWriteTool.execute(argsJson, sessionId, appContext)
             FileEditTool.NAME -> FileEditTool.execute(argsJson, sessionId, appContext)
             DownloadTool.NAME -> DownloadTool.execute(argsJson, appContext)
-            FileOpsTool.NAME -> FileOpsTool.execute(argsJson, appContext)
+            FileOpsTool.NAME -> FileOpsTool.execute(argsJson, FLOATING_SESSION_ID, appContext)
             PdfTool.NAME -> PdfTool.execute(argsJson, appContext)
             TranslateTool.NAME -> {
                 val repo = providerRepo()
@@ -363,7 +369,7 @@ class FloatingAssistantViewModel(
             WebExtractTool.NAME -> WebExtractTool.execute(argsJson, appContext)
             OcrTool.NAME -> OcrTool.execute(argsJson, appContext)
             WebSearchTool.NAME -> WebSearchTool.execute(argsJson, appContext)
-            FileSearchTool.NAME -> FileSearchTool.execute(argsJson, appContext)
+            FileSearchTool.NAME -> FileSearchTool.execute(argsJson, FLOATING_SESSION_ID, appContext)
             ArchiveTool.NAME -> ArchiveTool.execute(argsJson, appContext)
             ReadImageTool.NAME -> ReadImageTool.execute(argsJson, sessionId, appContext)
             // [F-A3 / Master Prompt] Task Engine tools — same as main chat.

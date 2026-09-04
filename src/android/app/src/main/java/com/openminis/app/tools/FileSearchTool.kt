@@ -32,7 +32,7 @@ object FileSearchTool {
         propertyOrdering = listOf("tool_title", "pattern", "base", "max_results"),
     )
 
-    fun execute(argsJson: String, context: Context): ToolExecutionResult {
+    fun execute(argsJson: String, sessionId: String, context: Context): ToolExecutionResult {
         val args = runCatching { JSONObject(argsJson) }.getOrDefault(JSONObject())
         val toolTitle = args.optString("tool_title", NAME)
         val pattern = args.optString("pattern", "").trim()
@@ -42,7 +42,7 @@ object FileSearchTool {
         if (pattern.isEmpty()) {
             return ToolExecutionResult("Error: 'pattern' is required.", false, toolTitle = toolTitle)
         }
-        val base = resolveBase(baseArg, context)
+        val base = resolveBase(baseArg, sessionId, context)
             ?: return ToolExecutionResult("Error: Invalid base: $baseArg (use /var/minis or /sdcard paths).", false, toolTitle = toolTitle)
         if (!base.exists()) {
             return ToolExecutionResult("Error: Base folder not found: $baseArg", false, toolTitle = toolTitle)
@@ -65,11 +65,11 @@ object FileSearchTool {
         return ToolExecutionResult(sb.toString().trim(), true, toolTitle = toolTitle)
     }
 
-    private fun resolveBase(arg: String, context: Context): File? = when {
+    private fun resolveBase(arg: String, sessionId: String, context: Context): File? = when {
         // [F-A2 fix / MOUNT-FILEOPS-01] Same /var/minis host-mapping fix as
         // FileOpsTool: guest paths resolve through the session-aware resolver
         // instead of a host path that never exists.
-        arg.startsWith("/var/minis") -> PRootKernel.resolveSessionHostPath("floating-assistant", arg, context)
+        arg.startsWith("/var/minis") -> PRootKernel.resolveSessionHostPath(sessionId, arg, context)
             ?: PRootKernel.resolveHostPath(arg)
         arg.startsWith("/sdcard") -> File("/storage/emulated/0" + arg.substringAfter("/sdcard"))
         arg.startsWith("/storage/emulated/0") -> File(arg)

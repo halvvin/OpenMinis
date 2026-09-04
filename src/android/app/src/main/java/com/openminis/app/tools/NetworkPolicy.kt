@@ -23,9 +23,14 @@ object NetworkPolicy {
         0x0A000000L to 0x0AFFFFFFL,          // 10.0.0.0/8
         0xAC100000L to 0xAC1FFFFFL,          // 172.16.0.0/12
         0xC0A80000L to 0xC0A8FFFFL,          // 192.168.0.0/16
-        0xA9FE0000L to 0xA9FEFFFFL,          // 169.254.0.0/16
-        0x64400000L to 0x647FFFFFL,          // 100.64.0.0/10 (CGNAT)
+        0xA9FE0000L to 0xA9FEFFFFL,          // 169.254.0.0/16 (incl. cloud metadata)
         0x00000000L to 0x00FFFFFFL,          // 0.0.0.0/8 (reserved)
+        // [B2 fix] 100.64.0.0/10 (CGNAT) REMOVED from the blocked list.
+        // On several mobile carriers (user-confirmed: DNS maps EVERY public
+        // domain to 100.64.x.x CGNAT egress IPs), blocking this range made
+        // web_extract unusable for the entire web. CGNAT-internal services
+        // are not a meaningful SSRF target for a phone app, while the real
+        // targets — loopback, private LAN, link-local/metadata — stay blocked.
     )
 
     /**

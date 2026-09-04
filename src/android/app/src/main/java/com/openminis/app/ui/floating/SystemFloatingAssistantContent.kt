@@ -204,6 +204,33 @@ fun SystemFloatingAssistantContent(
                             }
                         }
                         Spacer(Modifier.weight(1f))
+                        // [B8] Execution-mode gear inside the panel — the
+                        // AUTO/PLANNING/ACCEPT selector used to live only in
+                        // app settings; cycling it here keeps the three modes
+                        // reachable mid-conversation.
+                        val modeLabels = listOf("خودکار", "برنامه‌ریزی", "تایید")
+                        var modeMenu by remember { mutableStateOf(false) }
+                        Box {
+                            Text(
+                                "⚙ " + modeLabels[prefs.executionMode.coerceIn(0, 2)],
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier
+                                    .clickable { modeMenu = true }
+                                    .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
+                                    .padding(horizontal = 5.dp, vertical = 3.dp),
+                            )
+                            DropdownMenu(expanded = modeMenu, onDismissRequest = { modeMenu = false }) {
+                                modeLabels.forEachIndexed { idx, label ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            prefs.executionMode = idx
+                                            modeMenu = false
+                                        },
+                                    )
+                                }
+                            }
+                        }
                         if (busy) {
                             // [F-A1] Stop the agent loop.
                             IconButton(onClick = { viewModel.stop() }, modifier = Modifier.size(24.dp)) {
@@ -218,8 +245,7 @@ fun SystemFloatingAssistantContent(
                     LazyColumn(
                         modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(messages, key = { "${it.role}-${System.identityHashCode(it)}" }) { m ->
+                    ) {                        items(messages, key = { "${it.role}-${System.identityHashCode(it)}" }) { m ->
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
                                 colors = CardDefaults.cardColors(

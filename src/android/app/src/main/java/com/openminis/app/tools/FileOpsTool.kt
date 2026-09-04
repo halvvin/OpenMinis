@@ -44,7 +44,7 @@ object FileOpsTool {
         propertyOrdering = listOf("tool_title", "operation", "path", "target", "recursive"),
     )
 
-    fun execute(argsJson: String, context: Context): ToolExecutionResult {
+    fun execute(argsJson: String, sessionId: String, context: Context): ToolExecutionResult {
         val args = runCatching { JSONObject(argsJson) }.getOrDefault(JSONObject())
         val toolTitle = args.optString("tool_title", NAME)
         val op = args.optString("operation", "").lowercase().trim()
@@ -55,7 +55,7 @@ object FileOpsTool {
         if (op.isEmpty() || path.isEmpty()) {
             return ToolExecutionResult("Error: 'operation' and 'path' are required.", false, toolTitle = toolTitle)
         }
-        val file = resolve(path, context)
+        val file = resolve(path, sessionId, context)
             ?: return ToolExecutionResult("Error: Invalid path: $path (only app paths and /sdcard are allowed).", false, toolTitle = toolTitle)
         if (op == "list") {
             if (!file.exists()) return ToolExecutionResult("Error: Path not found: $path", false, toolTitle = toolTitle)
@@ -103,7 +103,7 @@ object FileOpsTool {
     }
 
     /** Resolve an app-path or /sdcard path to a real File. */
-    private fun resolve(path: String, context: Context): File? {
+    private fun resolve(path: String, sessionId: String, context: Context): File? {
         return when {
             // [F-A2 fix / MOUNT-FILEOPS-01] /var/minis/... is a GUEST path —
             // on the host these live under filesDir/minis-global (shared dirs)
@@ -114,7 +114,7 @@ object FileOpsTool {
             // context; PRootKernel.resolveSessionHostPath resolves per-session
             // subdirs against it and falls back to the global map for
             // memory/skills/shared.
-            path.startsWith(BASE) -> PRootKernel.resolveSessionHostPath("floating-assistant", path, context)
+            path.startsWith(BASE) -> PRootKernel.resolveSessionHostPath(sessionId, path, context)
                 ?: PRootKernel.resolveHostPath(path)
             SDCARD.any { path.startsWith(it) } -> {
                 val real = "/storage/emulated/0" + path.substringAfter("/sdcard").substringAfter("/storage/emulated/0")
